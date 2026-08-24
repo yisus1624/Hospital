@@ -1,0 +1,14 @@
+node_modules/
+.vercel
+.DS_Store
+Thumbs.db
+
+# ---------------------------------------------------------------------------
+# Datos de gestantes: NUNCA deben salir de este equipo.
+#
+# datos-prueba/ contiene el archivo real con nombres y numeros de documento.
+# Sirve para correr `npm test` en local, pero queda fuera del repositorio y,
+# por tanto, fuera de Vercel. No borres estas lineas.
+# ---------------------------------------------------------------------------
+datos-prueba/
+*.csv

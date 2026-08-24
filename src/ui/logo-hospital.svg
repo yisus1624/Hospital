@@ -1,0 +1,47 @@
+<!--
+  Emblema institucional en SVG.
+
+  Es una version simplificada del escudo del hospital, pensada para verse
+  nitida en tamaños pequeños. Si prefieres el logo oficial en imagen, guarda
+  el archivo como `src/ui/logo-hospital.png` y la aplicacion lo usara
+  automaticamente en lugar de este SVG (ver src/ui/app.js).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img"
+     aria-label="E.S.E. Hospital San Rafael de Chinú">
+  <defs>
+    <linearGradient id="aro" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"  stop-color="#3aa9e8"/>
+      <stop offset="100%" stop-color="#0e6fb8"/>
+    </linearGradient>
+    <path id="arcoSuperior" fill="none"
+          d="M 60 60 m -46 0 a 46 46 0 0 1 92 0"/>
+    <path id="arcoInferior" fill="none"
+          d="M 60 60 m 44 0 a 44 44 0 0 1 -88 0"/>
+  </defs>
+
+  <!-- Anillo exterior -->
+  <circle cx="60" cy="60" r="58" fill="url(#aro)"/>
+  <circle cx="60" cy="60" r="42" fill="#ffffff"/>
+
+  <!-- Texto curvo -->
+  <text font-family="system-ui, sans-serif" font-size="10.5" font-weight="700"
+        fill="#ffffff" letter-spacing="1.1">
+    <textPath href="#arcoSuperior" startOffset="50%" text-anchor="middle">
+      E.S.E. HOSPITAL SAN RAFAEL
+    </textPath>
+  </text>
+  <text font-family="system-ui, sans-serif" font-size="10.5" font-weight="700"
+        fill="#ffffff" letter-spacing="1.4">
+    <textPath href="#arcoInferior" startOffset="50%" text-anchor="middle">
+      DE CHINÚ
+    </textPath>
+  </text>
+
+  <!-- Figura central: baculo y cruz, atributos de San Rafael Arcangel -->
+  <g stroke="#0e6fb8" stroke-linecap="round" fill="none">
+    <path d="M60 36 v48" stroke-width="4"/>
+    <path d="M46 52 h28" stroke-width="4"/>
+    <path d="M60 36 a7 7 0 0 1 9 7" stroke-width="3"/>
+  </g>
+  <circle cx="60" cy="90" r="4.5" fill="#0e6fb8"/>
+</svg>

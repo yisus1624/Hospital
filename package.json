@@ -1,0 +1,13 @@
+{
+  "name": "sira",
+  "version": "1.0.0",
+  "description": "Valida y corrige archivos SMH segun el Instructivo V5 antes de subirlos al sistema de salud",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "npx --yes serve -l 3000 .",
+    "test": "node tests/validar.mjs && node tests/cobertura.mjs",
+    "test:real": "node tests/validar.mjs",
+    "test:cobertura": "node tests/cobertura.mjs"
+  }
+}

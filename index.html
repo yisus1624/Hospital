@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SIRA — Revisión de archivos SMH</title>
+<meta name="description" content="Valida y corrige archivos SMH segun el Instructivo V5 antes de subirlos al sistema de salud. Procesamiento local, sin envio de datos.">
+<link rel="stylesheet" href="src/ui/estilos.css?v=15">
+<link rel="icon" href="src/ui/logo-hospital.jpg">
+</head>
+<body>
+
+<!-- ===================================================== barra superior -->
+<header class="barra-superior">
+  <div class="marca">
+    <img id="logoHospital" src="src/ui/logo-hospital.jpg" alt="E.S.E. Hospital San Rafael de Chinú"
+         onerror="this.onerror=null; this.src='src/ui/logo-hospital.svg';">
+    <div class="marca-texto">
+      <strong>SIRA</strong>
+      <span>Sistema Integrado de Revisión de Archivos</span>
+    </div>
+  </div>
+
+  <div class="acciones-superior">
+    <span class="insignia" title="El archivo se procesa en esta pestaña y nunca se envía a ningún servidor">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2">
+        <path d="M12 2l8 4v6c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6z"/><path d="M9 12l2 2 4-4"/>
+      </svg>
+      Procesamiento local
+    </span>
+    <button class="icono-redondo" id="btnAyuda" title="Cómo funciona" aria-label="Cómo funciona">
+      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round">
+        <circle cx="12" cy="12" r="9.5"/><path d="M9.2 9a2.9 2.9 0 1 1 3.6 2.8c-.5.2-.8.7-.8 1.2v.6"/>
+        <circle cx="12" cy="17" r=".9" fill="currentColor" stroke="none"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<!-- ========================================================= migas de pan -->
+<nav class="migas" aria-label="Ubicación">
+  <span class="modulo">SALUD MATERNA</span>
+  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4">
+    <polyline points="9 18 15 12 9 6"/>
+  </svg>
+  <span class="actual">CORRECCIÓN DE ARCHIVOS SMH</span>
+</nav>
+
+<main>
+
+  <!-- ====================================================== bienvenida -->
+  <section id="bienvenida" class="tarjeta bienvenida">
+    <img src="src/ui/logo-hospital.jpg" alt="" aria-hidden="true"
+         onerror="this.onerror=null; this.src='src/ui/logo-hospital.svg';">
+    <h1>Corrección de archivos SMH</h1>
+    <p>
+      Revisa cada campo del archivo de Seguimiento Materno contra las reglas del
+      Instructivo V5, corrige lo que se pueda corregir sin inventar datos y lo
+      deja listo para subirlo a la plataforma.
+    </p>
+    <button class="btn primario grande" id="btnAbrir">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      Corregir un archivo
+    </button>
+    <p class="fino">Archivo CSV · Se revisa contra el Instructivo SMH V5</p>
+
+    <!-- Segunda entrada: quien ya subio y le rechazaron entra por aqui. -->
+    <div class="entrada-errores">
+      <span>¿La plataforma ya te rechazó el archivo?</span>
+      <button class="btn" id="btnAbrirErrores">Empezar por el reporte de errores</button>
+    </div>
+  </section>
+
+  <!-- ================================================ detalle en página -->
+  <section id="detalle" hidden>
+
+    <div id="avisos"></div>
+
+    <div class="tarjeta cinta-resultado">
+      <div class="cinta-info">
+        <span class="check-mini" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+               stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </span>
+        <div>
+          <strong id="cintaTitulo">Archivo corregido</strong>
+          <code id="cintaNombre">—</code>
+        </div>
+      </div>
+      <div class="cinta-acciones">
+        <button class="btn" id="btnVolverAsistente">Ver el asistente</button>
+        <button class="btn primario" id="btnDescargar2">Descargar archivo</button>
+      </div>
+    </div>
+
+    <div class="metricas">
+      <div class="metrica">
+        <span class="valor" id="mRegistros">0</span>
+        <span class="etiqueta">Gestantes</span>
+      </div>
+      <div class="metrica buena">
+        <span class="valor" id="mCorregidos">0</span>
+        <span class="etiqueta">Correcciones aplicadas</span>
+      </div>
+      <div class="metrica" id="tarjetaPendientes">
+        <span class="valor" id="mPendientes">0</span>
+        <span class="etiqueta">Campos que debes completar</span>
+      </div>
+    </div>
+
+    <div class="tarjeta panel">
+      <div class="pestanas" role="tablist">
+        <button class="pestana activa" data-panel="panelPendientes" role="tab">
+          Campos por completar <span class="pildora" id="pPendientes">0</span>
+        </button>
+        <button class="pestana" data-panel="panelCambios" role="tab">
+          Correcciones <span class="pildora" id="pCambios">0</span>
+        </button>
+      </div>
+
+      <div id="panelPendientes">
+        <div class="barra-panel">
+          <p id="textoPendientes"></p>
+          <button class="btn menor" id="btnCsvPendientes">Descargar lista</button>
+        </div>
+        <div class="tabla-envoltura"><table id="tablaPendientes"></table></div>
+        <div class="paginacion" id="pagPendientes" hidden>
+          <label>
+            Mostrar
+            <select data-tabla="pendientes" class="selector-tamano">
+              <option value="10">10</option>
+              <option value="30" selected>30</option>
+              <option value="50">50</option>
+            </select>
+            por página
+          </label>
+          <span class="rango" id="rangoPendientes"></span>
+          <div class="botones-pagina">
+            <button class="btn menor" data-tabla="pendientes" data-ir="anterior">← Atrás</button>
+            <span class="indice" id="indicePendientes"></span>
+            <button class="btn menor" data-tabla="pendientes" data-ir="siguiente">Siguiente →</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="panelCambios" hidden>
+        <div class="barra-panel">
+          <p>Todo lo que el corrector modificó, con el motivo de cada cambio.</p>
+          <button class="btn menor" id="btnCsvCambios">Descargar reporte</button>
+        </div>
+        <div class="tabla-envoltura"><table id="tablaCambios"></table></div>
+        <div class="paginacion" id="pagCambios" hidden>
+          <label>
+            Mostrar
+            <select data-tabla="cambios" class="selector-tamano">
+              <option value="10">10</option>
+              <option value="30" selected>30</option>
+              <option value="50">50</option>
+            </select>
+            por página
+          </label>
+          <span class="rango" id="rangoCambios"></span>
+          <div class="botones-pagina">
+            <button class="btn menor" data-tabla="cambios" data-ir="anterior">← Atrás</button>
+            <span class="indice" id="indiceCambios"></span>
+            <button class="btn menor" data-tabla="cambios" data-ir="siguiente">Siguiente →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tarjeta editor-manual">
+      <button class="cabecera-opciones" id="toggleEditor" aria-expanded="false">
+        <svg class="chevron" viewBox="0 0 24 24" width="15" height="15" fill="none"
+             stroke="currentColor" stroke-width="2.4"><polyline points="9 18 15 12 9 6"/></svg>
+        Corregir un campo suelto sin salir de aquí
+        <span class="fino">Alternativa rápida a editar en Excel</span>
+      </button>
+
+      <div class="cuerpo-editor" id="cuerpoEditor" hidden>
+        <p class="fino explicacion">
+          El reporte de errores de la plataforma trae el número de fila y el nombre
+          del campo. Escríbelos aquí, corrige el valor y vuelve a descargar.
+        </p>
+
+        <div class="busqueda">
+          <label>
+            <span>Fila</span>
+            <input id="buscarFila" inputmode="numeric" placeholder="16">
+          </label>
+          <label class="ancho">
+            <span>Campo</span>
+            <input id="buscarCampo" list="listaCampos" placeholder="fum" spellcheck="false">
+            <datalist id="listaCampos"></datalist>
+          </label>
+          <button class="btn" id="btnBuscar">Buscar</button>
+        </div>
+
+        <div id="resultadoBusqueda" hidden>
+          <div class="ficha-campo">
+            <div class="ficha-datos">
+              <strong id="fichaNombre"></strong>
+              <small id="fichaReglas"></small>
+            </div>
+            <label class="ficha-valor">
+              <span>Valor</span>
+              <input id="fichaInput" spellcheck="false">
+            </label>
+            <button class="btn primario" id="btnAplicar">Aplicar</button>
+          </div>
+          <p class="resultado-edicion" id="resultadoEdicion" hidden></p>
+        </div>
+
+        <p class="error-nombre" id="errorBusqueda" hidden></p>
+      </div>
+    </div>
+
+    <div class="tarjeta bloque-errores" id="bloqueErrores">
+      <div class="cabecera-errores">
+        <div>
+          <h3>¿La plataforma rechazó el archivo?</h3>
+          <p class="fino">
+            Sube aquí el CSV de errores que te devolvió el sistema y te digo, error
+            por error, cuáles ya están resueltos y cuáles siguen abiertos.
+          </p>
+        </div>
+        <button class="btn" id="btnCargarErrores">Subir reporte de errores</button>
+        <input type="file" id="archivoErrores" accept=".csv,.txt" hidden>
+      </div>
+
+      <div id="avisoErrores" class="alerta mala" hidden></div>
+
+      <div id="resultadoErrores" hidden>
+        <div class="metricas metricas-errores">
+          <div class="metrica">
+            <span class="valor" id="eTotal">0</span>
+            <span class="etiqueta">Errores que reportó</span>
+          </div>
+          <div class="metrica buena">
+            <span class="valor" id="eCorregidos">0</span>
+            <span class="etiqueta">Ya resueltos</span>
+          </div>
+          <div class="metrica" id="tarjetaESiguen">
+            <span class="valor" id="eSiguen">0</span>
+            <span class="etiqueta">Siguen abiertos</span>
+          </div>
+        </div>
+
+        <!-- Solo aparece si el reporte demuestra que la plataforma rechaza la Ñ. -->
+        <div class="aviso-enye" id="avisoEnye" hidden>
+          <div>
+            <strong>La plataforma rechazó la Ñ</strong>
+            <p id="textoEnye"></p>
+          </div>
+          <button class="btn primario" id="btnEnyeComoN">Reemplazar Ñ por N</button>
+        </div>
+
+        <div class="cierre-errores" id="cierreErrores">
+          <div>
+            <strong id="tituloCierre"></strong>
+            <p id="textoErrores"></p>
+          </div>
+          <button class="btn primario" id="btnDescargar3">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Descargar archivo corregido
+          </button>
+        </div>
+        <div class="tabla-envoltura"><table id="tablaErrores"></table></div>
+      </div>
+    </div>
+
+    <button class="btn texto" id="btnOtro">← Procesar otro archivo</button>
+  </section>
+
+</main>
+
+<!-- =================================================== ASISTENTE (modal) -->
+<dialog id="asistente" class="asistente">
+
+  <header class="asistente-cabecera">
+    <ol class="stepper" id="stepper">
+      <li data-paso="carga" class="activo">
+        <span class="circulo">1</span>
+        <span class="titulo-paso">Cargar archivo</span>
+      </li>
+      <li data-paso="procesando">
+        <span class="circulo">2</span>
+        <span class="titulo-paso">Validar y corregir</span>
+      </li>
+      <li data-paso="listo">
+        <span class="circulo">3</span>
+        <span class="titulo-paso">Descargar</span>
+      </li>
+    </ol>
+    <button class="icono-redondo cerrar-asistente" id="btnCerrar" aria-label="Cerrar">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+           stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+  </header>
+
+  <p class="leyenda-paso" id="leyendaPaso"></p>
+
+  <div class="asistente-cuerpo">
+
+    <!-- ------------------------------------------------ vista 1 · cargar -->
+    <div class="vista" data-vista="carga">
+      <div id="zonaCarga" class="zona-soltar" tabindex="0" role="button"
+           aria-label="Seleccionar el archivo CSV">
+        <input type="file" id="archivo" accept=".csv,.txt" hidden>
+        <div class="icono-subir">
+          <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+        </div>
+        <h2>Arrastra tu archivo aquí</h2>
+        <p>o <span class="enlace">búscalo en tu computador</span></p>
+        <p class="fino">Archivo CSV del reporte de Seguimiento Materno</p>
+      </div>
+
+
+      <!-- Aparece cuando ya se entrego el reporte de errores y falta el SMH. -->
+      <div id="notaCarga" class="alerta aviso" hidden></div>
+      <div id="error" class="alerta mala" hidden></div>
+    </div>
+
+    <!-- -------------------------------------------- vista 2 · procesando -->
+    <div class="vista" data-vista="procesando" hidden>
+      <div class="procesando">
+        <div class="rueda" aria-hidden="true"><span></span><span></span><span></span></div>
+        <h2 id="tituloProceso">Revisando tu archivo…</h2>
+        <p class="nombre-origen" id="nombreOrigen"></p>
+
+        <ol class="pasos" id="listaPasos">
+          <li data-paso="leer"><i></i>Leyendo el archivo</li>
+          <li data-paso="columnas"><i></i>Reconociendo las columnas</li>
+          <li data-paso="validar"><i></i>Validando contra el instructivo</li>
+          <li data-paso="corregir"><i></i>Aplicando correcciones</li>
+          <li data-paso="nombre"><i></i>Generando el nombre del archivo</li>
+        </ol>
+
+        <div class="barra"><div class="barra-relleno" id="barraRelleno"></div></div>
+      </div>
+    </div>
+
+    <!-- ------------------------------------------------- vista 3 · listo -->
+    <div class="vista" data-vista="listo" hidden>
+      <div class="exito">
+        <div class="marca-exito" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor"
+               stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </div>
+        <h2>Tu archivo quedó corregido</h2>
+        <p class="resumen-exito" id="resumenExito"></p>
+      </div>
+
+      <div class="chips" id="chipsResumen"></div>
+
+      <!-- Explica por qué quedan campos sin corregir. Solo aparece si los hay. -->
+      <div class="aviso-pendientes" id="avisoPendientes" hidden>
+        <span class="icono-aviso" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+               stroke-width="2.2" stroke-linecap="round">
+            <path d="M12 9v4"/><circle cx="12" cy="17" r=".6" fill="currentColor"/>
+            <path d="M10.3 3.9L2.4 17.6a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>
+          </svg>
+        </span>
+        <div>
+          <strong id="avisoPendientesTitulo"></strong>
+          <p>
+            El formato quedó corregido, pero hay datos clínicos que faltan en el
+            archivo o que se contradicen entre sí. <b>No los completo por ti</b>:
+            inventarlos haría que el sistema aceptara información falsa de una
+            paciente.
+          </p>
+          <p>
+            Puedes descargar el archivo así, pero <b>el sistema rechazará esas
+            filas</b>. Pulsa <b>Ver detalle</b> para ver cuáles son, en qué fila
+            están y qué hay que corregir.
+          </p>
+        </div>
+      </div>
+
+      <div class="editor-nombre">
+        <div class="editor-cabecera">
+          <span>Nombre del archivo</span>
+          <button class="btn texto menor" id="btnRestaurar" hidden>Restaurar sugerido</button>
+        </div>
+
+        <div class="campos-nombre">
+          <label>
+            <span>NIT</span>
+            <input id="nNit" inputmode="numeric" maxlength="9" size="9" spellcheck="false">
+          </label>
+          <em>_</em>
+          <label>
+            <span>Año</span>
+            <input id="nAnio" inputmode="numeric" maxlength="4" size="4" spellcheck="false">
+          </label>
+          <em>_</em>
+          <label>
+            <span>Mes</span>
+            <input id="nMes" inputmode="numeric" maxlength="2" size="2" spellcheck="false">
+          </label>
+          <em>_ S</em>
+          <label class="destacado">
+            <span>Semana</span>
+            <input id="nSemana" inputmode="numeric" maxlength="2" size="2" spellcheck="false">
+          </label>
+          <em class="ext">.csv</em>
+        </div>
+
+        <p class="vista-previa">Se descargará como <code id="nombreFinal">—</code></p>
+        <p class="pista" id="pistaSemana" hidden></p>
+        <p class="error-nombre" id="errorNombre" hidden></p>
+      </div>
+
+      <!-- Excel reescribe las fechas al guardar y dana el archivo. -->
+      <div class="aviso-excel">
+        <span class="icono-aviso" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+               stroke-width="2.2" stroke-linecap="round">
+            <path d="M12 9v4"/><circle cx="12" cy="17" r=".6" fill="currentColor"/>
+            <path d="M10.3 3.9L2.4 17.6a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>
+          </svg>
+        </span>
+        <div>
+          <strong>Sube el archivo tal como se descarga. No lo abras ni lo guardes desde Excel.</strong>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ------------------------------------------------------ pie de acción -->
+  <footer class="asistente-pie">
+    <button class="btn texto" id="btnAtras" hidden>← Cargar otro archivo</button>
+    <div class="pie-derecha">
+      <button class="btn" id="btnVerDetalle" hidden>Ver detalle</button>
+      <button class="btn primario" id="btnDescargar" hidden>
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Descargar archivo corregido
+      </button>
+    </div>
+  </footer>
+</dialog>
+
+<!-- ============================================================== ayuda -->
+<dialog id="dlgAyuda" class="dialogo">
+  <div class="dialogo-cabecera">
+    <h2>Cómo funciona SIRA</h2>
+    <button class="icono-redondo" id="btnCerrarAyuda" aria-label="Cerrar">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+           stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+
+  <div class="dialogo-cuerpo">
+    <p>
+      SIRA revisa el archivo de Seguimiento Materno <strong>campo por campo</strong>
+      contra el <strong>Instructivo SMH V5</strong>: formato de cada dato, valores
+      permitidos, campos obligatorios, los que dependen de otro y la coherencia
+      entre fechas. Corrige todo lo que se puede corregir sin inventar información
+      clínica.
+    </p>
+
+    <h3>Qué corrige solo</h3>
+    <ul>
+      <li>Espacios sobrantes, tildes y eñes que el validador rechaza.</li>
+      <li>Fechas en cualquier formato, llevadas a <code>AAAA-MM-DD</code>.</li>
+      <li>Valores de catálogo mal escritos (<code>Positivo</code> → <code>POSITIVO</code>).</li>
+      <li>Campos que no aplican y deben quedar vacíos.</li>
+      <li>Códigos de «no aplica» y fechas centinela <code>1845-01-01</code>.</li>
+      <li>Grávida, FPP y el nombre del archivo.</li>
+    </ul>
+
+    <h3>Qué no corrige, y por qué</h3>
+    <p>
+      Un dato clínico que no está en el archivo no se puede deducir. Rellenarlo
+      produciría un reporte que el sistema acepta pero que informa algo falso
+      sobre una paciente. Esos casos aparecen en <strong>Revisión manual</strong>
+      con la fila y el motivo, para que los completes tú.
+    </p>
+
+    <h3>Si la plataforma rechaza el archivo</h3>
+    <p>
+      Sube su CSV de errores en el bloque del final: SIRA lo cruza con tu archivo
+      y te muestra qué errores ya están resueltos y cuáles siguen abiertos.
+    </p>
+    <p>
+      Para corregir, edita en Excel con normalidad y vuelve a pasar el archivo
+      por aquí: aunque Excel cambie las fechas al guardar, SIRA las devuelve al
+      formato del instructivo. También puedes corregir un campo suelto sin salir
+      de la página, con el buscador que hay debajo de las tablas.
+    </p>
+
+    <h3>Sobre las columnas</h3>
+    <p>
+      El reporte se compone de 248 campos. No hace falta que tu archivo los traiga
+      todos ni en el mismo orden: SIRA los reconoce por su nombre, tolera
+      mayúsculas, tildes y espacios de más, ignora columnas ajenas y agrega
+      vacías las que falten. El archivo que descargas siempre sale con la
+      estructura completa que la plataforma espera.
+    </p>
+
+    <h3>Privacidad</h3>
+    <p>
+      El archivo se procesa dentro de esta pestaña del navegador. No se envía a
+      ningún servidor y no queda guardado en ninguna parte.
+    </p>
+  </div>
+</dialog>
+
+<footer class="pie-pagina">
+  <img src="src/ui/logo-hospital.jpg" alt="" aria-hidden="true"
+         onerror="this.onerror=null; this.src='src/ui/logo-hospital.svg';">
+  <div>
+    <strong>E.S.E. Hospital San Rafael de Chinú</strong>
+    Tu archivo se procesa dentro de esta pestaña y no se envía a ningún servidor.
+    Las correcciones siguen el Instructivo SMH V5; los campos que exigen dato clínico
+    se listan para que los completes tú.
+  </div>
+</footer>
+
+<!--
+  Aviso si la pagina se abrio con doble clic (file://).
+  Los modulos de JavaScript quedan bloqueados por seguridad del navegador en ese
+  caso, asi que la aplicacion no funcionaria y los botones no responderian.
+  Este script corre siempre, porque no es de tipo module.
+-->
+<script>
+if (location.protocol === 'file:') {
+  document.addEventListener('DOMContentLoaded', () => {
+    document.body.innerHTML = `
+      <div class="pantalla-aviso">
+        <div class="tarjeta">
+          <h1>Hay que abrirla desde el servidor local</h1>
+          <p>
+            Abriste el archivo con doble clic. Los navegadores bloquean los módulos
+            de JavaScript cuando la página se carga así, por eso los botones no
+            responden.
+          </p>
+          <p>Abre una terminal en la carpeta del proyecto y ejecuta:</p>
+          <pre>npm run dev</pre>
+          <p>Después entra a <a href="http://localhost:3000">http://localhost:3000</a></p>
+        </div>
+      </div>`;
+  });
+}
+</script>
+
+<script type="module" src="src/ui/app.js?v=15"></script>
+</body>
+</html>
