@@ -6,8 +6,9 @@
   "private": true,
   "scripts": {
     "dev": "npx --yes serve -l 3000 .",
-    "test": "node tests/validar.mjs && node tests/cobertura.mjs",
+    "test": "node tests/instructivo.mjs && node tests/validar.mjs && node tests/cobertura.mjs",
     "test:real": "node tests/validar.mjs",
-    "test:cobertura": "node tests/cobertura.mjs"
+    "test:cobertura": "node tests/cobertura.mjs",
+    "test:instructivo": "node tests/instructivo.mjs"
   }
 }

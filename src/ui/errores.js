@@ -7,6 +7,7 @@ const $ = id => document.getElementById(id);
 
 const ESTADO_ETIQUETA = {
   pendiente: ['falta', 'Sigue abierto'],
+  dependiente: ['incoherente', 'Depende de otro campo'],
   corregido: ['bien', 'Ya resuelto'],
   desconocido: ['incoherente', 'Sin ubicar'],
 };
@@ -142,27 +143,34 @@ export function iniciarErrores({ estado: obtenerEstado, leerTexto, escapar, repr
 
     $('eTotal').textContent = r.total;
     $('eCorregidos').textContent = r.corregidos;
-    $('eSiguen').textContent = r.pendientes + r.desconocidos;
+    $('eSiguen').textContent = r.pendientes + r.dependientes + r.desconocidos;
     $('tarjetaESiguen').className = 'metrica ' +
-      (r.pendientes + r.desconocidos ? 'atencion' : 'limpia');
+      (r.pendientes + r.dependientes + r.desconocidos ? 'atencion' : 'limpia');
 
     const grupos = agruparPorMensaje(cruzados);
     const abiertos = grupos.filter(g => g.pendientes > 0).length;
+    const colgados = grupos.filter(g => !g.pendientes && g.dependientes > 0).length;
     const sinUbicar = grupos.filter(g => !g.pendientes && !g.campo && !g.esNombreArchivo).length;
 
     const cierre = $('cierreErrores');
     const partes = [`La plataforma reportó ${r.total} errores en ${r.filas} filas, agrupados en ${grupos.length} tipos.`];
 
-    if (abiertos) {
-      $('tituloCierre').textContent = abiertos === 1
+    if (abiertos || colgados) {
+      const total = abiertos + colgados;
+      $('tituloCierre').textContent = total === 1
         ? 'Queda 1 tipo de error por resolver'
-        : `Quedan ${abiertos} tipos de error por resolver`;
+        : `Quedan ${total} tipos de error por resolver`;
       partes.push('Están marcados abajo con la fila en la que aparecen. Corrígelos y vuelve a pasar el archivo por aquí.');
       cierre.className = 'cierre-errores atencion';
     } else {
       $('tituloCierre').textContent = 'Tu archivo ya resuelve todos estos errores';
       partes.push('Descárgalo y súbelo de nuevo a la plataforma tal como sale, sin abrirlo.');
       cierre.className = 'cierre-errores resuelto';
+    }
+    if (colgados) {
+      partes.push(
+        `Otros ${colgados} ${colgados === 1 ? 'tipo depende' : 'tipos dependen'} de un campo que ` +
+        'todavía está por completar: no se pueden dar por resueltos hasta que lo decidas.');
     }
     if (sinUbicar) {
       partes.push(`${sinUbicar} no se pudieron ubicar en una columna del reporte.`);
@@ -175,6 +183,7 @@ export function iniciarErrores({ estado: obtenerEstado, leerTexto, escapar, repr
       </tr></thead>
       <tbody>${grupos.map(g => {
         const estado = g.pendientes ? 'pendiente'
+          : g.dependientes ? 'dependiente'
           : (g.campo || g.esNombreArchivo) ? 'corregido'
           : 'desconocido';
         const [clase, texto] = ESTADO_ETIQUETA[estado];
@@ -185,7 +194,8 @@ export function iniciarErrores({ estado: obtenerEstado, leerTexto, escapar, repr
             ${g.campo ? `<small>${escapar(g.campoBruto)}</small>` : ''}</td>
           <td class="col-fila">${g.veces}</td>
           <td class="col-fila">${escapar(filas) || '—'}</td>
-          <td>${escapar(g.mensaje)}</td>
+          <td>${escapar(g.mensaje)}${g.dependientes && !g.pendientes
+            ? `<small>Se resuelve al completar: ${escapar(g.depende.join(', '))}</small>` : ''}</td>
         </tr>`;
       }).join('')}</tbody></table>`;
 

@@ -5,7 +5,7 @@
 // valor se vuelve a corregir unicamente esa fila, con los mismos criterios que
 // el resto del archivo, y se refrescan los reportes.
 
-import { corregirFila, OPCIONES } from '../core/corrector.js';
+import { corregirFila, resumir, OPCIONES } from '../core/corrector.js';
 import { CAMPOS, COLUMNAS, POR_KEY } from '../core/esquema.js';
 import { canon } from '../core/texto.js';
 
@@ -67,12 +67,7 @@ export function iniciarEditor({ estado: obtenerEstado, refrescar, escapar }) {
     estado.cambios = ordenar(estado.cambios.filter(c => c.fila !== nFila).concat(r.cambios));
     estado.pendientes = ordenar(estado.pendientes.filter(p => p.fila !== nFila).concat(r.pendientes));
 
-    estado.resumen = {
-      registros: estado.filas.length,
-      correcciones: estado.cambios.length,
-      pendientes: estado.pendientes.length,
-      filasConPendientes: new Set(estado.pendientes.map(p => p.fila)).size,
-    };
+    estado.resumen = resumir(estado.filas, estado.cambios, estado.pendientes);
 
     refrescar();
 
@@ -86,19 +81,25 @@ export function iniciarEditor({ estado: obtenerEstado, refrescar, escapar }) {
 
   // --- edicion directa desde la tabla de campos por completar --------------
 
+  /** La tabla se repinta al corregir, asi que el resultado se avisa aparte. */
+  function avisar(r) {
+    const aviso = $('avisoEdicion');
+    aviso.textContent = r.mensaje;
+    aviso.className = 'aviso-edicion ' + (r.ok ? 'bien' : 'mal');
+    aviso.hidden = false;
+  }
+
   document.addEventListener('change', e => {
     const input = e.target.closest('.editar-pendiente');
     if (!input) return;
+    avisar(editarCampo(Number(input.dataset.fila), input.dataset.columna, input.value));
+  });
 
-    const celda = input.closest('td');
-    const r = editarCampo(Number(input.dataset.fila), input.dataset.columna, input.value);
-
-    // La tabla se repinta al corregir, asi que el aviso se muestra aparte.
-    const salida = $('resultadoEdicion');
-    salida.textContent = r.mensaje;
-    salida.className = 'resultado-edicion ' + (r.ok ? 'bien' : 'mal');
-    salida.hidden = false;
-    if (celda) celda.classList.toggle('editado', r.ok);
+  // La sugerencia nunca se aplica sola: solo al pulsarla, celda por celda.
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('.usar-sugerencia');
+    if (!btn) return;
+    avisar(editarCampo(Number(btn.dataset.fila), btn.dataset.columna, btn.dataset.valor));
   });
 
   // --- buscador de cualquier campo ----------------------------------------

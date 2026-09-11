@@ -2017,7 +2017,10 @@ export const CAMPOS = [
    "POSITIVO",
    "NEGATIVO",
    "INDETECTABLE"
-  ]
+  ],
+  "x": {
+   "no_realizado_vacio": true
+  }
  },
  {
   "num": 131,

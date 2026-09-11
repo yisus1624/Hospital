@@ -49,13 +49,22 @@ archivo real y **no debe subirse a GitHub ni a Vercel**.
 ## Resultado sobre el caso real
 
 El archivo `8000193912_2026_07_S32.csv` fue rechazado con **909 errores**.
-Tras pasarlo por el corrector:
+Tras pasarlo por el corrector (`npm test` reproduce estas cifras):
 
 | | |
 |---|---|
-| Errores resueltos automáticamente | **909 de 909 (100 %)** |
-| Correcciones aplicadas | 548 |
-| Requieren que tú completes el dato | 0 |
+| Correcciones aplicadas | 414 |
+| Campos que necesitan que los completes tú | 76, en 18 filas |
+| Errores del reporte que quedan resueltos | 650 |
+| Errores que siguen abiertos | 88 |
+| Errores que dependen de un campo por decidir | 171 |
+
+Los 171 «dependientes» no están resueltos ni abiertos: son errores sobre campos
+cuya causa es otro campo que todavía está pendiente. El caso típico son los
+nueve campos de seguimiento, que solo hay que diligenciar si el **tipo de caso**
+va entre 1 y 12, y el tipo de caso es justamente uno de los datos que tienes que
+decidir tú. Hasta que lo hagas no se puede afirmar que esos errores estén
+resueltos.
 
 ### Numeración de las filas
 
@@ -81,10 +90,17 @@ Para correr las pruebas:
 npm test
 ```
 
-Son dos suites: `tests/validar.mjs` comprueba el resultado contra el archivo
-real que la plataforma rechazó, y `tests/cobertura.mjs` genera registros
-sintéticos que llenan las 248 columnas con datos desordenados y verifica que
-todas salgan conformes al instructivo.
+Son tres suites, y comprueban cosas distintas:
+
+| Suite | Qué comprueba |
+|---|---|
+| `tests/instructivo.mjs` | Que el esquema **dice lo mismo que el Instructivo V5**: los 248 tipos, longitudes, catálogos, obligatoriedades, condiciones y reglas de fecha, contrastados contra la tabla del PDF |
+| `tests/validar.mjs` | Que sobre un archivo real no se altera ningún dato y lo que exige decisión humana queda señalado |
+| `tests/cobertura.mjs` | Que las 248 columnas, llenadas con datos desordenados, salen conformes |
+
+La primera es la que responde a «¿el validador aplica el instructivo?». Corre
+contra `docs/instructivo-v5.json`, que es la tabla del PDF extraída tal cual, y
+**hay que volver a correrla cada vez que se toque `esquema.js`**.
 
 ---
 
@@ -140,13 +156,26 @@ mismo registro:
 | Centinelas obligatorios | Chagas sin tamizaje → fecha `1845-01-01` |
 | Códigos de "no aplica" | Sin sífilis confirmada → tratamiento `4`, pareja `3` |
 | Causa de muerte | Si la madre no falleció → `4` |
-| Tipo de caso vacío | → `21`, lo que libera los nueve campos de seguimiento |
-| Grávida | Recalculada: partos + cesáreas + abortos + ectópicos + 1 |
-| FPP incoherente | Recalculada como FUM + 280 días (regla de Naegele) |
 | Nombre del archivo | `NIT_AÑO_MES_Snn` con NIT de 9 dígitos |
-| FUM imposible | Si implica más de 42 semanas de gestación, se reconstruye desde la semana gestacional registrada |
-| Pruebas en el trimestre equivocado | Una prueba de VIH tomada en la semana 18 pero reportada como de trimestre 1 se traslada al trimestre 2 |
-| Controles duplicados | Dos controles del mismo profesional con idéntica fecha: se elimina la copia |
+| Resultado de sífilis | `POSITIVO` pasa a `REACTIVO` si el estudio declarado es VDRL: es el mismo resultado con la palabra que usa el instructivo |
+
+### Cuando un valor no se puede interpretar
+
+Si una celda trae algo que el sistema no admite y que no se puede traducir sin
+adivinar (`ALTO` donde solo van `SI`/`NO`, una fecha que no es una fecha, un
+`2,5` en un campo de enteros), **la celda sale vacía en el archivo descargado**.
+No hay alternativa: si va el valor original, la plataforma rechaza la fila
+entera.
+
+El dato no se pierde. Cada una de esas celdas aparece en los dos reportes:
+
+- en **campos por completar**, con el valor original y el motivo, para que lo
+  corrijas ahí mismo;
+- en el **reporte de correcciones**, marcada como celda vaciada, para que quede
+  constancia de que el archivo descargado ya no lleva ese dato.
+
+Arriba, junto a las métricas, sale un contador de «celdas vaciadas». Si no es
+cero, conviene resolver esos campos antes de subir el archivo.
 
 ## Qué NO corrige, y por qué
 
@@ -157,22 +186,22 @@ Esos casos se listan en la pestaña **Revisión manual**:
 - Documentos, diagnósticos CIE-10 o resultados de laboratorio en blanco.
 - Resultados que se contradicen con el tipo de estudio declarado.
 
-La FUM es el único dato clínico que se reconstruye, y solo cuando la registrada
-es **imposible** (implicaría un embarazo de más de 42 semanas). En ese caso se
-deriva de la semana gestacional del propio archivo y el cambio queda anotado en
-el reporte de correcciones para cotejarlo con la historia clínica.
+Tampoco se recalcula ningún dato clínico, ni siquiera cuando el propio archivo
+dice cuál debería ser. Estos casos se **señalan con la respuesta ya calculada**,
+pero no se aplican solos:
 
-### Dos supuestos que sí se aplican
+| Caso | Qué se sugiere |
+|---|---|
+| Grávida que no cuadra | La suma: partos + cesáreas + abortos + ectópicos + 1 |
+| Falta la FPP, o es incoherente con la FUM | FUM + 280 días (regla de Naegele) |
+| FUM imposible (más de 42 semanas de gestación) | La FUM que corresponde a la semana gestacional registrada |
+| Tipo de caso vacío | El código `21`, que es «no tiene tipo de caso» |
+| Prueba de VIH en el trimestre equivocado | A qué trimestre habría que pasar las cinco columnas |
+| Dos controles del mismo profesional con idéntica fecha | Dejar vacío el duplicado |
 
-Para que el sistema no rechace filas completas, el corrector asume dos cosas
-cuando el archivo no las trae:
-
-- Las preguntas obligatorias de SI/NO que quedan en blanco se registran como
-  `NO`, es decir, "sin registro afirmativo".
-- Si hay fecha de un control pero no se indicó la modalidad, se registra
-  `PRESENCIAL`.
-
-Ambos casos aparecen uno por uno en el reporte de correcciones, con su motivo.
+La diferencia importa: son datos de una paciente, y quien decide es quien tiene
+la historia clínica delante. En la tabla de campos por completar la sugerencia
+viene escrita en la casilla; aplicarla es un clic, pero es **tu** clic.
 
 ---
 
@@ -193,21 +222,27 @@ sira/
 │   │   ├── catalogos.js       Sinónimos y equivalencias por campo
 │   │   ├── normalizar.js      Normalización de una celda según su tipo
 │   │   ├── reglas.js          Coherencia entre campos y centinelas
-│   │   ├── corrector.js       Orquestador
-│   │   └── archivo.js         Lectura/escritura de CSV y nombre de salida
+│   │   ├── corrector.js       Orquestador y orden de lectura de fechas
+│   │   ├── archivo.js         Lectura/escritura de CSV y nombre de salida
+│   │   └── errores-sistema.js Cruce con el reporte de errores de la plataforma
 │   │
 │   └── ui/
 │       ├── app.js             Asistente, tablas y descargas
+│       ├── editor.js          Edición de una celda sin salir de la app
+│       ├── errores.js         Pantalla del cruce con el reporte de la plataforma
 │       ├── estilos.css
 │       ├── logo-hospital.svg  Emblema institucional
 │       └── LEEME-logo.md      Cómo usar el logo oficial
 │
 ├── tests/
-│   └── validar.mjs            Prueba de regresión contra el caso real
+│   ├── instructivo.mjs        El esquema contra el Instructivo V5, campo a campo
+│   ├── validar.mjs            Prueba de regresión contra el caso real
+│   └── cobertura.mjs          Las 248 columnas con datos desordenados
 │
 ├── datos-prueba/              (excluida de git — contiene datos reales)
 └── docs/
     ├── Instructivo_SMH_V5.pdf Fuente normativa
+    ├── instructivo-v5.json    La tabla del PDF extraída, contra la que se prueba
     ├── schema.py              Script que generó esquema.js desde el instructivo
     └── columnas.py            Nombres oficiales de las 248 columnas
 ```
@@ -231,8 +266,20 @@ El reporte por sí solo no alcanza: solo trae fila, campo y mensaje, no los dato
 de la gestante. Por eso siempre hacen falta los dos archivos; lo que no importa
 es el orden en que los entregues.
 
-El cruce agrupa los errores por tipo y marca cuáles ya están resueltos y cuáles
-siguen abiertos, con el número de fila de cada uno.
+El cruce agrupa los errores por tipo y marca cada grupo con uno de tres estados,
+junto al número de fila donde aparece:
+
+| Estado | Qué significa |
+|---|---|
+| **Sigue abierto** | El corrector también señala esa celda: hay que resolverla |
+| **Depende de otro campo** | La celda está limpia, pero el mensaje habla de otro campo de esa misma fila que sigue pendiente. No se puede dar por resuelto hasta decidir ese otro campo |
+| **Ya resuelto** | Ni la celda ni los campos que cita el mensaje tienen nada pendiente |
+
+**Importante: el cruce no verifica el archivo contra las reglas de la
+plataforma**, porque esas reglas no están publicadas. Lo que hace es contrastar
+cada error con lo que el corrector ve hoy en esa celda. «Ya resuelto» significa
+«el corrector no encuentra nada que objetar aquí», no «la plataforma lo va a
+aceptar». La palabra final la tiene el sistema de salud.
 
 Si en ese reporte aparece un error de tipo «debe contener solo letras» sobre una
 celda que hoy lleva ñ, es la prueba de que la plataforma no la acepta: SIRA lo
@@ -240,7 +287,16 @@ avisa y ofrece un botón para reemplazar la ñ por N en todo el archivo y volver
 descargarlo. Hasta que el sistema no lo demuestre, la ñ se respeta.
 
 Sobre el caso real: de los 909 errores que devolvió la plataforma, el cruce
-muestra 908 resueltos y 1 abierto, con el mensaje textual del sistema.
+muestra 650 resueltos, 88 abiertos y 171 a la espera de otro campo, cada uno con
+el mensaje textual del sistema.
+
+Vale la pena ver por qué se resuelven tantos de golpe. La mayoría de los errores
+del caso real no eran errores independientes: el archivo traía `"NO "` con un
+espacio al final en campos como `se_realizo_ive` o `ecografia3_obstetrica`. La
+plataforma no reconocía ese valor, así que además del error propio disparaba
+todas las reglas condicionales que colgaban de él («el campo X debe estar
+diligenciado cuando se_realizo_ive es SI»). Al quitar el espacio —una corrección
+de formato, sin tocar el dato— se cae toda la cascada.
 
 **2. Corrige en Excel y vuelve a subir.** Es el camino natural y funciona:
 
@@ -250,6 +306,19 @@ muestra 908 resueltos y 1 abierto, con el mensaje textual del sistema.
 
 Está comprobado en las pruebas: un archivo corregido, editado y guardado en
 Excel, al volver a pasarlo por SIRA queda **idéntico** al original corregido.
+
+### Fechas `03/07/2026`: día/mes o mes/día
+
+Una fecha con barras y los dos números menores que 13 es ambigua, y leerla al
+revés cambia el dato sin que se note. SIRA no lo decide celda a celda: mira
+**todas** las fechas del archivo y busca la que lo demuestre. Si alguna trae
+`25/07/2026`, el primer número es el día y el archivo entero se lee así; si
+alguna trae `07/25/2026`, es al revés (eso pasa cuando el CSV se guardó desde un
+Excel en configuración regional inglesa).
+
+Si ninguna fecha lo demuestra, se leen como día/mes —que es lo que escribe Excel
+en español— y la app te lo avisa en pantalla, para que no dependa de una
+suposición callada.
 
 ## Corregir un campo suelto sin salir de SIRA
 
@@ -300,8 +369,34 @@ tabuladores, con o sin BOM y con cualquier tipo de salto de línea.
 
 ### Discrepancias del instructivo
 
-Al contrastar el documento con lo que el validador acepta en la práctica
-aparecieron dos contradicciones, resueltas a favor de lo que el sistema admite:
+`npm run test:instructivo` contrasta los 248 campos contra la tabla del PDF y
+las imprime una a una. Son siete, de dos clases distintas.
+
+**El validador real contradice al documento** (manda el validador: el archivo
+tiene que pasar por él, no por el PDF):
+
+- **Urocultivo3 y Urocultivo_post3.** El instructivo pide `SI`/`NO` y los hace
+  obligatorios. El reporte de la plataforma dice textualmente que solo admite
+  `POSITIVO`, `NEGATIVO`, `INDETECTABLE` «y vacío en caso que no aplique».
+- **Causa de muerte.** El instructivo la hace condicional a que la madre haya
+  fallecido, pero el código `4` («la persona no ha fallecido») tiene que ir
+  siempre. Se trata como obligatoria y el corrector rellena el `4`.
+- **Longitud de los tipos de estudio de sífilis** (campos 111 y 127). Declara
+  longitud 1, pero sus propios valores permitidos son `PRUEBA RAPIDA` y `VDRL`.
+
+**Erratas del propio documento** (se aplica la lectura coherente con el resto
+de la tabla):
+
+- **Fecha de realización de la prueba vih3** (142). Dice que depende del
+  resultado del trimestre **2**, pero es la fecha del trimestre 3 y su propia
+  nota habla de vih3.
+- **Alteración nutricional consulta1** (200). Dice que depende de *Control
+  nutrición 2*, pero los campos vecinos siguen el patrón 1→1 y 2→2.
+
+El PDF además numera dos campos distintos como el 87 (*Fecha htco* y *Frotis*);
+el esquema va por posición, que es como vienen las columnas del archivo.
+
+**Además**, y esto ya no es contradicción sino criterio:
 
 - **Longitudes.** El instructivo declara longitud 2 para `riesgo`, que admite
   `ALTO`; para los urocultivos, que admiten `INDETECTABLE`; y para `hb`, que

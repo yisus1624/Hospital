@@ -28,18 +28,18 @@ const SINONIMOS = {
 };
 
 /**
- * Traducciones especificas por campo, donde el archivo usa un vocabulario
- * distinto al que exige el validador.
+ * Traducciones especificas por campo: la palabra que trae el archivo y el
+ * codigo que el instructivo le asigna a esa misma palabra ("4: Alto",
+ * "5: Bajo", "21: Riesgo no evaluado").
  *
- * Detectadas comparando el archivo enviado con el reporte de errores devuelto
- * por la plataforma: varias columnas venian diligenciadas con ALTO/BAJO cuando
- * el sistema esperaba SI/NO o los codigos numericos 4/5.
+ * Solo se traduce lo que el instructivo define con esa palabra. SI/NO en un
+ * campo de riesgo, o ALTO/BAJO en uno de antecedentes, no dicen cual es el
+ * dato correcto: se dejan para revision manual.
  */
 export const MAPA_CAMPO = {
-  antecedentes_preclampsia: { ALTO: 'SI', BAJO: 'NO' },
-  riesgo_preeclampsia: { ALTO: '4', BAJO: '5', SI: '4', NO: '5' },
+  riesgo_preeclampsia: { ALTO: '4', BAJO: '5' },
   riesgo_tromboembolismo: {
-    ALTO: '4', BAJO: '5', SI: '4', NO: '5',
+    ALTO: '4', BAJO: '5',
     RIESGONOEVALUADO: '21', NOEVALUADO: '21',
   },
   laboratorios_alterados: {
@@ -66,8 +66,14 @@ export function aCatalogo(valor, catalogo, key) {
     if (syn && syn.some(s => canon(s) === c)) return v;
   }
 
-  // Prefijo, solo si resulta inequivoco
-  const pref = catalogo.filter(v => canon(v).startsWith(c) || c.startsWith(canon(v)));
+  // Abreviatura ("PRES" -> PRESENCIAL) o valor oficial seguido de un signo
+  // ("A+" -> A), solo si resulta inequivoco. Lo que sigue al valor oficial no
+  // puede ser una letra: "SIN EXAMEN" empieza por SI y significa lo contrario.
+  const pref = catalogo.filter(v => {
+    const o = canon(v);
+    return (c.length >= 3 && o.startsWith(c))
+        || (c.startsWith(o) && !/^[A-ZÑ]/.test(c.slice(o.length)));
+  });
   if (pref.length === 1) return pref[0];
 
   return null;

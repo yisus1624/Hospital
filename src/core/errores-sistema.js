@@ -66,12 +66,37 @@ export function leerReporteErrores(texto) {
 }
 
 /**
+ * Otros campos que menciona el mensaje de error.
+ *
+ * Muchas reglas de la plataforma son condicionales ("el campo X debe estar
+ * diligenciado cuando Y es SI"), asi que el error aparece sobre X pero la
+ * causa esta en Y. Se buscan los nombres de columna oficiales que aparecen
+ * literalmente en el texto del mensaje.
+ */
+function camposCitados(mensaje, propio) {
+  const t = canon(mensaje);
+  const citados = [];
+  for (const c of CAMPOS) {
+    if (canon(c.col) === canon(propio)) continue;
+    if (c.col.length >= 8 && t.includes(canon(c.col))) citados.push(c);
+  }
+  return citados;
+}
+
+/**
  * Cruza los errores con el archivo ya corregido.
  *
- * Un error se considera **pendiente** si el corrector tambien lo detecta en esa
- * misma celda. Si el corrector no ve nada raro, lo mas probable es que la
- * correccion ya lo haya resuelto, pero no se puede afirmar: solo la plataforma
- * decide. Por eso se marca como "corregido, falta confirmar".
+ * Importante: esto **no verifica** el archivo contra las reglas de la
+ * plataforma, porque esas reglas no estan publicadas. Lo que hace es contrastar
+ * cada error con lo que el corrector ve hoy en esa celda:
+ *
+ *   - `pendiente`   el corrector tambien señala esa celda: sigue abierto.
+ *   - `dependiente` la celda esta limpia, pero el mensaje habla de otro campo
+ *                   que si quedo pendiente en esa misma fila. No se puede dar
+ *                   por resuelto hasta que se decida ese otro campo.
+ *   - `corregido`   ni la celda ni los campos que cita el mensaje tienen nada
+ *                   pendiente. Lo mas probable es que ya este resuelto, pero
+ *                   solo la plataforma decide.
  */
 export function cruzar(errores, filas, pendientes) {
   const pendientePorCelda = new Set(
@@ -88,11 +113,19 @@ export function cruzar(errores, filas, pendientes) {
     // sobre el nombre queda resuelto al descargar de nuevo.
     const esNombreArchivo = canon(e.campoBruto) === canon('nombre_archivo');
 
+    // Causa aguas arriba: el mensaje cita otro campo que sigue pendiente.
+    const depende = (!sigue && e.fila)
+      ? camposCitados(e.mensaje, e.campoBruto)
+          .filter(c => pendientePorCelda.has(`${e.fila}|${canon(c.col)}`))
+      : [];
+
     return {
       ...e,
       valorActual: valor,
       esNombreArchivo,
+      depende: depende.map(c => c.nombre),
       estado: sigue ? 'pendiente'
+        : depende.length ? 'dependiente'
         : (e.campo || esNombreArchivo) ? 'corregido'
         : 'desconocido',
     };
@@ -131,6 +164,7 @@ export function resumirCruce(cruzados) {
     total: cruzados.length,
     corregidos: cuenta('corregido'),
     pendientes: cuenta('pendiente'),
+    dependientes: cuenta('dependiente'),
     desconocidos: cuenta('desconocido'),
     campos: new Set(cruzados.map(c => c.campoBruto).filter(Boolean)).size,
     filas: new Set(cruzados.map(c => c.fila).filter(Boolean)).size,
@@ -151,12 +185,18 @@ export function agruparPorMensaje(cruzados) {
         veces: 0,
         filas: [],
         pendientes: 0,
+        dependientes: 0,
+        depende: [],
       });
     }
     const g = mapa.get(clave);
     g.veces++;
     if (c.fila) g.filas.push(c.fila);
     if (c.estado === 'pendiente') g.pendientes++;
+    if (c.estado === 'dependiente') {
+      g.dependientes++;
+      for (const n of c.depende) if (!g.depende.includes(n)) g.depende.push(n);
+    }
   }
   return [...mapa.values()].sort((a, b) => b.veces - a.veces);
 }

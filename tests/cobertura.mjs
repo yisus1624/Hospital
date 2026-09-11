@@ -114,10 +114,15 @@ const fallosPorRegla = {
   fecha: [], catalogo: [], longitud: [], rango: [], caracteres: [], decimal: [],
 };
 
+// Una celda señalada para revision manual no tiene que salir conforme: el
+// corrector no la toca y la lista para que la corrija una persona.
+const reportadas = new Set(r.pendientes.map(p => `${p.fila}|${p.campo}`));
+const señalada = (i, c) => reportadas.has(`${i + 2}|${c.col}`);
+
 for (const [i, fila] of r.filas.entries()) {
   for (const c of CAMPOS) {
     const v = fila[c.key];
-    if (v === '' || v == null) continue;
+    if (v === '' || v == null || señalada(i, c)) continue;
     const ref = `fila ${i + 1} · ${c.col} = "${v}"`;
 
     if (c.tipo === 'F' && !/^\d{4}-\d{2}-\d{2}$/.test(v)) {
@@ -184,13 +189,13 @@ for (const [i, fila] of r.filas.entries()) {
       ? fila[padre] !== '' && fila[padre] != null
       : vals.some(x => String(x) === String(fila[padre]));
 
-    if (!cumple && fila[c.key]) {
+    if (!cumple && fila[c.key] && !señalada(i, c)) {
       incoherentes.push(`fila ${i + 1} · ${c.col} tiene "${fila[c.key]}" pero ${POR_KEY[padre].col} = "${fila[padre]}"`);
     }
   }
 }
 comprobar(incoherentes.length === 0,
-  'Los campos que no aplican quedan vacios',
+  'Los campos que no aplican quedan vacios o señalados para revision',
   incoherentes.length ? `${incoherentes.length} casos` : '');
 if (incoherentes.length) problemas.push(...incoherentes.slice(0, 6).map(x => `[condicional] ${x}`));
 
@@ -221,8 +226,67 @@ for (const [nombre, texto] of Object.entries(variantes)) {
 }
 
 // ---------------------------------------------------------------------------
+// Trampas: valores que parecen arreglables pero cambiarlos alteraria el dato
+// ---------------------------------------------------------------------------
+
+console.log('\n== Trampas: el dato no se altera ==');
+
+const base = filaSucia(0);
+const TRAMPAS = [
+  ['malformaciones_congenitas_en_la_gestacion', 'SIN EXAMEN', 'no se lee como SI'],
+  ['hepatitis_b', 'NO', 'no se lee como NO REACTIVO'],
+  ['telefono', '300ABC1234', 'no se le quitan las letras'],
+  ['talla', '1.55', 'no se convierte en 155'],
+  ['documento', 'AB123456', 'no se le quitan las letras'],
+  ['peso_al_inicio_de_la_gestacion', '64.25', 'no se redondea a 64.3'],
+  ['nombre_1', 'A'.repeat(70), 'no se recorta a 60'],
+  ['gestante_antecedentes_preeclampsia', 'BAJO', 'no se traduce a NO'],
+  ['riesgo_preeclampsia', 'SI', 'no se traduce a 4'],
+  ['partos', '1-2', 'el guion no se borra para leer 12'],
+];
+for (const [col, valor, porque] of TRAMPAS) {
+  const t = procesar([{ ...base, [col]: valor }]);
+  const c = CAMPOS.find(x => x.col === col);
+  const marcado = t.pendientes.some(p => p.campo === col);
+  const intacto = t.filas[0][c.key] === '' || t.filas[0][c.key] === valor;
+  comprobar(marcado && intacto, `${col} = "${valor.slice(0, 20)}": ${porque}, queda para revision`);
+}
+
+// ---------------------------------------------------------------------------
 // Reprocesar la salida no debe cambiarla: la correccion es estable
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Fechas ambiguas: el orden se decide por el archivo, no por celda
+// ---------------------------------------------------------------------------
+
+console.log('\n== Orden de las fechas con barras ==');
+{
+  const vacia = () => Object.fromEntries(CAMPOS.map(c => [c.col, '']));
+  const k = c => CAMPOS.find(x => x.col === c).key;
+  const fum = 'fum', fpp = 'fpp';
+  // Fila con solo estas dos fechas: asi la unica evidencia del orden es la que
+  // pone la prueba, sin el ruido del resto de columnas.
+  const soloFechas = (a, b) => ({ ...vacia(), [fum]: a, [fpp]: b });
+
+  // Archivo español: 25/07 prueba que el primer numero es el dia.
+  const esp = procesar([soloFechas('25/07/2025', '03/04/2026')]);
+  comprobar(esp.ordenFechas.orden === 'dmy' && esp.filas[0][k(fpp)] === '2026-04-03',
+    'Con una fecha de dia > 12 el archivo se lee como dia/mes/año',
+    `03/04/2026 -> ${esp.filas[0][k(fpp)]}`);
+
+  // Archivo guardado por un Excel en ingles: 07/25 prueba que el dia va segundo.
+  const eng = procesar([soloFechas('07/25/2025', '04/03/2026')]);
+  comprobar(eng.ordenFechas.orden === 'mdy' && eng.filas[0][k(fpp)] === '2026-04-03',
+    'Con una fecha de mes/dia el archivo entero se lee en ese orden',
+    `04/03/2026 -> ${eng.filas[0][k(fpp)]}`);
+  comprobar(eng.avisos.length > 0, 'Y queda avisado, porque cambia como se leen todas las fechas');
+
+  // Sin ninguna fecha que lo pruebe se mantiene dia/mes, pero se avisa.
+  const amb = procesar([soloFechas('03/04/2025', '05/06/2026')]);
+  comprobar(amb.ordenFechas.orden === 'dmy' && amb.avisos.length > 0,
+    'Si ninguna fecha lo prueba se mantiene dia/mes y se avisa de la duda');
+}
 
 console.log('\n== Estabilidad ==');
 const segunda = procesar(mapearColumnas(leerCSV(csvBase)).filas);

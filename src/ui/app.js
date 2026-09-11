@@ -287,7 +287,7 @@ async function cargar(file) {
       partes: { ...partes },
       sugeridas: { ...partes },
       sugerencia,
-      avisos: [aviso, ...avisos].filter(Boolean),
+      avisos: [aviso, ...(resultado.avisos ?? []), ...avisos].filter(Boolean),
       origen: file.name,
     };
 
@@ -337,14 +337,20 @@ function pintar() {
     pendientes.length
       ? `<span class="chip atencion"><b>${pendientes.length}</b> sin completar</span>`
       : `<span class="chip buena">Sin pendientes</span>`,
-  ].join('');
+    resumen.vaciados
+      ? `<span class="chip atencion"><b>${resumen.vaciados}</b> celdas vaciadas</span>`
+      : '',
+  ].filter(Boolean).join('');
 
   // Explicacion de los campos que no se pueden corregir automaticamente.
   $('avisoPendientes').hidden = pendientes.length === 0;
   if (pendientes.length) {
     const filas = resumen.filasConPendientes;
+    const vaciadas = resumen.vaciados
+      ? `. ${resumen.vaciados} de ellos traían un valor que el sistema no admite: esa celda sale vacía en la descarga y el dato original solo queda aquí`
+      : '';
     $('avisoPendientesTitulo').textContent =
-      `${pendientes.length} campos de ${filas} ${filas === 1 ? 'gestante' : 'gestantes'} necesitan que los completes tú`;
+      `${pendientes.length} campos de ${filas} ${filas === 1 ? 'gestante' : 'gestantes'} necesitan que los completes tú${vaciadas}`;
   }
 
   // --- en la pagina ---

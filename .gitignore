@@ -12,3 +12,9 @@ Thumbs.db
 # ---------------------------------------------------------------------------
 datos-prueba/
 *.csv
+
+# Borrador de rediseno de la interfaz, sin terminar: no se despliega.
+index-rediseno-sin-terminar.html
+
+# Configuracion local de Claude Code
+.claude/

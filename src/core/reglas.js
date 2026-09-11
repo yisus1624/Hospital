@@ -1,14 +1,19 @@
 // Reglas de coherencia entre campos.
 //
-// Separadas en dos grupos segun un criterio estricto:
+// Criterio estricto: el corrector NO cambia datos. Por su cuenta solo hace dos
+// cosas, y ambas estan escritas en el instructivo:
 //
-//   - Las que se CORRIGEN: el valor correcto queda determinado por el propio
-//     instructivo o por otro campo del registro (centinelas, codigos de "no
-//     aplica", sumatorias, campos que no aplican y deben ir vacios).
+//   - Llenar una celda VACIA con el codigo que el instructivo prescribe
+//     textualmente para esa situacion ("Si no tiene colocar NONE", "Si no
+//     aplica registrar 1845-01-01", "Sifilis confirmada NO: 4").
 //
-//   - Las que solo se REPORTAN: exigen un dato clinico que no esta en el
-//     archivo. Inventarlo produciria un reporte aceptado por el sistema pero
-//     falso, asi que se listan para diligenciarlos a mano.
+//   - Vaciar una celda que solo trae la fecha centinela 1845-01-01 donde el
+//     instructivo exige la celda vacia. No se pierde nada: las dos formas
+//     dicen "no aplica".
+//
+// Todo lo demas —un dato que contradice a otro, una suma que no cuadra, una
+// fecha imposible, un campo obligatorio en blanco— se REPORTA con el motivo y,
+// cuando la hay, una sugerencia. La decision la toma una persona.
 
 import { CAMPOS, POR_KEY } from './esquema.js';
 import { aFloat } from './normalizar.js';
@@ -26,143 +31,201 @@ export function cumple(cond, fila) {
   return true;
 }
 
+/** Lee una condicion del esquema en lenguaje llano. */
+function describir([tipo, key, vals]) {
+  const nombre = POR_KEY[key].nombre;
+  if (tipo === 'lleno') return `${nombre} tiene dato`;
+  const lista = vals.length > 3 ? `${vals[0]} a ${vals.at(-1)}` : vals.join(' o ');
+  return `${nombre} es ${lista}`;
+}
+
 // ---------------------------------------------------------------------------
-// Correcciones deterministas
+// Codigos que el instructivo prescribe para una celda vacia
 // ---------------------------------------------------------------------------
 
 /**
- * Completa los campos obligatorios cuyo valor de "no aplica" esta definido
- * por el instructivo o por el mensaje de error del validador.
+ * Fechas obligatorias para las que el instructivo dice que registrar cuando no
+ * hay dato. Se cita el texto literal en el reporte de correcciones.
  */
-export function aplicarCentinelas(fila, add) {
-  const set = (key, valor, motivo) => {
-    if (fila[key] !== valor) { add(key, valor, motivo); fila[key] = valor; }
+const FECHAS_SIN_DATO = {
+  fecha_anticonceptivo: 'Si no aplica registrar 1845-01-01',
+  fecha_tamizaje_vih_parto:
+    'Si no ha llegado al momento del parto o no se le realiza, registrar 1845-01-01',
+  fecha_asa: 'Si no aplica o no se suministra registrar 1845-01-01',
+  seguimiento_posevento1: 'Si no aplica o no se realiza seguimiento registrar 1845-01-01',
+  seguimiento_posevento2: 'Si no aplica o no se realiza seguimiento registrar 1845-01-01',
+  seguimiento_posevento3: 'Si no aplica o no se realiza seguimiento registrar 1845-01-01',
+  seguimiento_posevento4: 'Si no aplica o no se realiza seguimiento registrar 1845-01-01',
+};
+
+/**
+ * Completa las celdas vacias cuyo valor de "no aplica" fija el instructivo.
+ * Una celda con dato nunca se sobrescribe: si contradice la regla, se reporta.
+ */
+export function aplicarCentinelas(fila, add, pend) {
+  /** Llena solo si esta vacia. Devuelve si la lleno. */
+  const llenar = (key, valor, cita) => {
+    if (fila[key]) return false;
+    add(key, valor, `Sin dato. El instructivo indica: «${cita}»`);
+    fila[key] = valor;
+    return true;
   };
 
-  // Chagas: la fecha 1845-01-01 y "NO SE REALIZA TAMIZAJE" son equivalentes.
-  // El validador rechaza cualquier combinacion distinta.
+  // Chagas: la fecha 1845-01-01 y "NO SE REALIZA TAMIZAJE" van juntas.
   if (fila.chagas === 'NO SE REALIZA TAMIZAJE') {
-    set('fecha_chagas', NA_FECHA,
-      'Chagas sin tamizaje: el sistema exige la fecha centinela 1845-01-01');
+    if (!llenar('fecha_chagas', NA_FECHA, 'No se realiza tamizaje: 1845-01-01')
+        && fila.fecha_chagas !== NA_FECHA) {
+      pend('fecha_chagas',
+        `Diagnóstico de Chagas dice "NO SE REALIZA TAMIZAJE", pero hay fecha de tamizaje (${fila.fecha_chagas}). ` +
+        'Si el tamizaje se hizo, registra su resultado en el diagnóstico; si no, la fecha es 1845-01-01',
+        'incoherente', NA_FECHA);
+    }
   } else if (fila.fecha_chagas === NA_FECHA && fila.chagas) {
-    set('chagas', 'NO SE REALIZA TAMIZAJE',
-      'La fecha de Chagas es 1845-01-01, que el sistema solo admite con "NO SE REALIZA TAMIZAJE"');
+    pend('fecha_chagas',
+      `El diagnóstico de Chagas es ${fila.chagas}, así que hubo tamizaje, pero la fecha es 1845-01-01 ` +
+      '(que significa "no se realiza"). Registra la fecha real del tamizaje');
   }
 
-  // Sifilis: si no esta confirmada, los codigos de tratamiento son los de NA.
-  if (fila.sifilis_confirmada === 'NO') {
-    set('tratamiento_sifilis', '4', 'Sifilis no confirmada: tratamiento con codigo 4 (no aplica)');
-    set('tratamiento_sifilis_pareja', '3',
-      'Sifilis no confirmada: tratamiento de la pareja con codigo 3 (no aplica)');
+  // Sifilis: los codigos de "no aplica" solo van con sifilis no confirmada.
+  const TRATAMIENTOS = [
+    ['tratamiento_sifilis', '4', '1, 2 o 3'],
+    ['tratamiento_sifilis_pareja', '3', '1 o 2'],
+  ];
+  for (const [key, na, validos] of TRATAMIENTOS) {
+    if (fila.sifilis_confirmada === 'NO') {
+      if (llenar(key, na, `Sífilis gestacional confirmada es NO: ${na}: NA`)) continue;
+      if (fila[key] !== na) {
+        pend(key,
+          `Sífilis gestacional confirmada es NO, y en ese caso el instructivo solo admite ${na} (no aplica); ` +
+          `el archivo trae ${fila[key]}. Si la sífilis sí está confirmada, corrige ese campo a SI`,
+          'incoherente', na);
+      }
+    } else if (fila.sifilis_confirmada === 'SI' && fila[key] === na) {
+      pend(key,
+        `Con sífilis confirmada el valor es ${validos}; el ${na} (no aplica) es solo para sífilis no confirmada`);
+    }
   }
 
-  // Causa de muerte: si la madre no fallecio, el unico valor admitido es 4.
+  // Causa de muerte: 4 si la madre no fallecio; 1, 2 o 3 si fallecio.
   if (fila.vitalidad_madre === '1' || fila.vitalidad_madre === '3') {
-    set('causa_muerte', '4', 'La madre no ha fallecido: causa de muerte 4');
-    if (fila.fecha_muerte) {
-      set('fecha_muerte', '', 'La madre no ha fallecido: se vacia la fecha de muerte');
+    if (!llenar('causa_muerte', '4', '4: La persona no ha fallecido') && fila.causa_muerte !== '4') {
+      pend('causa_muerte',
+        `La vitalidad de la madre es ${fila.vitalidad_madre} (no ha fallecido), y en ese caso la causa de ` +
+        `muerte es 4; el archivo trae ${fila.causa_muerte}. Revisa cuál de los dos está mal`,
+        'incoherente', '4');
     }
+  } else if (fila.vitalidad_madre === '2' && ['4', '55'].includes(fila.causa_muerte)) {
+    pend('causa_muerte', 'La madre falleció (vitalidad 2): la causa de muerte debe ser 1, 2 o 3');
   }
 
-  // Tipo de caso vacio equivale a "no tiene tipo de caso" (21). Esto ademas
-  // libera los nueve campos de seguimiento, que solo aplican para casos 1 a 12.
+  for (const [key, cita] of Object.entries(FECHAS_SIN_DATO)) llenar(key, NA_FECHA, cita);
+
+  // La fecha de salida solo lleva centinela si hubo aborto.
+  if (fila.via_terminacion === 'ABORTO') {
+    llenar('fecha_salida_parto', NA_FECHA, 'Si la vía de terminación fue aborto, registrar 1845-01-01');
+  }
+
+  for (const key of ['nombre2', 'apellido2']) llenar(key, 'NONE', 'Si no tiene colocar NONE');
+
+  // El tipo de caso vacio no se da por 21: el archivo no dice si la gestante
+  // tiene o no alguna de las caracteristicas 1 a 12. Se sugiere, no se asume.
   if (!fila.tipo_caso) {
-    set('tipo_caso', '21',
-      'Tipo de caso sin diligenciar: se registra 21 (no tiene tipo de caso)');
-  }
-
-  // Fechas obligatorias con centinela explicito en el instructivo.
-  for (const key of ['fecha_anticonceptivo', 'fecha_tamizaje_vih_parto', 'fecha_asa',
-    'seguimiento_posevento1', 'seguimiento_posevento2', 'seguimiento_posevento3',
-    'seguimiento_posevento4']) {
-    if (!fila[key]) {
-      set(key, NA_FECHA,
-        `${POR_KEY[key].nombre}: sin dato, el instructivo indica registrar 1845-01-01`);
-    }
-  }
-
-  // La fecha de salida solo lleva centinela si hubo aborto. Si no hay via de
-  // terminacion registrada, el campo no aplica y lo vacia limpiarNoAplicables.
-  if (fila.via_terminacion === 'ABORTO' && !fila.fecha_salida_parto) {
-    set('fecha_salida_parto', NA_FECHA,
-      'Via de terminacion ABORTO: el instructivo indica registrar 1845-01-01');
-  }
-
-  // Segundo nombre y segundo apellido ausentes se registran como NONE.
-  for (const key of ['nombre2', 'apellido2']) {
-    if (!fila[key]) {
-      set(key, 'NONE', `${POR_KEY[key].nombre} sin dato: el instructivo exige NONE`);
-    }
+    pend('tipo_caso',
+      'Falta el tipo de caso. Si la gestante no tiene ninguna de las características 1 a 12, ' +
+      'el instructivo usa el código 21 (no tiene tipo de caso)',
+      'falta', '21');
   }
 }
 
-/** Vacia los campos cuya condicion de aplicabilidad no se cumple. */
-export function limpiarNoAplicables(fila, add) {
+/**
+ * Campos que solo se diligencian si otro cumple una condicion.
+ *
+ * Si el campo trae la centinela 1845-01-01 se vacia (dice lo mismo). Si trae
+ * un dato real, no se borra: puede que el dato este bien y lo que falle sea el
+ * campo del que depende (un diagnostico en Diag3 con Riesgo BAJO puede
+ * significar que el riesgo era ALTO).
+ */
+export function limpiarNoAplicables(fila, add, pend) {
   for (const c of CAMPOS) {
     if (c.req !== 'COND' || !c.x?.cond) continue;
     if (cumple(c.x.cond, fila) || !fila[c.key]) continue;
+
     const padre = POR_KEY[c.x.cond[1]];
-    add(c.key, '',
-      `No aplica porque ${padre.nombre} es "${fila[padre.key] || 'vacio'}": el sistema lo exige vacio`);
-    fila[c.key] = '';
+    const actual = fila[padre.key] || 'vacío';
+
+    if (fila[c.key] === NA_FECHA) {
+      add(c.key, '',
+        `1845-01-01 significa "no aplica", y el instructivo pide aquí la celda vacía porque ` +
+        `${padre.nombre} es "${actual}"`);
+      fila[c.key] = '';
+      continue;
+    }
+    pend(c.key,
+      `Solo se diligencia si ${describir(c.x.cond)}, y ${padre.nombre} es "${actual}". ` +
+      `Si este dato es correcto, corrige ${padre.nombre}; si no, deja este campo vacío`);
   }
 }
 
-/** Recalculos y coherencias entre campos. */
-export function aplicarCruzadas(fila, add, pend, opciones) {
-  // Grabida = partos + cesareas + abortos + ectopicos + embarazo actual
+// ---------------------------------------------------------------------------
+// Coherencias entre campos: se reportan, no se corrigen
+// ---------------------------------------------------------------------------
+
+export function aplicarCruzadas(fila, add, pend) {
+  // Gravida = embarazo actual + partos + cesareas + abortos + ectopicos
   const partes = ['partos', 'cesareas', 'abortos', 'ectopicos'].map(k => aFloat(fila[k]) ?? 0);
   const esperado = String(partes.reduce((a, b) => a + b, 0) + 1);
   if (fila.gravida !== esperado) {
-    add('gravida', esperado,
-      `Recalculada: partos+cesareas+abortos+ectopicos+1 = ${esperado} (venia "${fila.gravida || 'vacio'}")`);
-    fila.gravida = esperado;
+    pend('gravida', fila.gravida
+      ? `El instructivo define grávida = embarazo actual + partos + cesáreas + abortos + ectópicos, ` +
+        `que aquí da ${esperado}, y el archivo dice ${fila.gravida}. Revisa si el error está en la ` +
+        'grávida o en alguno de esos campos'
+      : `Falta la grávida. Con los antecedentes registrados (embarazo actual + partos + cesáreas + ` +
+        `abortos + ectópicos) sería ${esperado}`,
+      fila.gravida ? 'incoherente' : 'falta', esperado);
   }
 
-  // Vivos + muertos no puede superar grabida: es dato clinico, solo se reporta.
+  // Vivos + muertos no puede superar grabida.
   const vm = (aFloat(fila.vivos) ?? 0) + (aFloat(fila.muertos) ?? 0);
   const g = aFloat(fila.gravida);
   if (g !== null && vm > g) {
-    pend('vivos', `Vivos + muertos (${vm}) supera grabida (${g}); revisar antecedentes obstetricos`);
+    pend('vivos', `Vivos + muertos (${vm}) supera la grávida (${g}); revisar antecedentes obstétricos`);
   }
 
-  corregirFumImposible(fila, add);
+  revisarFumImposible(fila, pend);
 
-  // FPP: el validador la exige entre la FUM y 42 semanas despues.
+  // FPP: el instructivo la exige posterior a la FUM, hasta 42 semanas despues.
   if (fila.fum) {
+    const naegele = fechas.sumarDias(fila.fum, 280);
     if (!fila.fpp) {
-      const nueva = fechas.sumarDias(fila.fum, 280);
-      add('fpp', nueva, 'FPP vacia: calculada como FUM + 280 dias (regla de Naegele)');
-      fila.fpp = nueva;
+      pend('fpp',
+        `Falta la FPP. Por la regla de Naegele (FUM + 280 días) sería ${naegele}; ` +
+        'confírmala con la historia clínica',
+        'falta', naegele);
     } else {
       const d = fechas.difDias(fila.fpp, fila.fum);
       if (d <= 0 || d > 294) {
-        const nueva = fechas.sumarDias(fila.fum, 280);
-        add('fpp', nueva,
-          `FPP incoherente (${d} dias desde la FUM, el maximo es 294). Recalculada: FUM + 280 dias`);
-        fila.fpp = nueva;
+        pend('fpp',
+          `La FPP (${fila.fpp}) queda a ${d} días de la FUM (${fila.fum}); debe ser posterior y dentro ` +
+          `de las 42 semanas siguientes. Por Naegele sería ${naegele}. Revisa si el error está en la ` +
+          'FPP o en la FUM',
+          'incoherente', naegele);
       }
     }
   }
 
   // Un resultado de VIH no puede coexistir con el rechazo de la prueba.
-  for (const [acepta, res, fecha] of [
-    ['acepta_prueba_vih1', 'resultado_vih1', 'fecha_prueba_vih1'],
-    ['acepta_prueba_vih2', 'resultado_vih2', 'fecha_prueba_vih2'],
-    ['acepta_prueba_vih3', 'resultado_vih3', 'fecha_prueba_vih3'],
-  ]) {
-    if (fila[acepta] === 'NO' && fila[res]) {
-      add(res, '', `Se vacia el resultado porque ${POR_KEY[acepta].nombre} es NO`);
-      fila[res] = '';
-      if (fila[fecha]) {
-        add(fecha, '', 'Se vacia la fecha porque la gestante no acepto la prueba');
-        fila[fecha] = '';
-      }
+  for (const n of [1, 2, 3]) {
+    const b = BLOQUE_VIH(n);
+    if (fila[b.acepta] === 'NO' && fila[b.resultado]) {
+      pend(b.resultado,
+        `La gestante no aceptó la prueba (${POR_KEY[b.acepta].nombre} = NO), pero hay resultado. ` +
+        'Si sí la aceptó, corrige ese campo a SI; si no, deja vacíos el resultado y su fecha');
     }
   }
 
   // El resultado de sifilis se expresa distinto segun el tipo de estudio:
   // POSITIVO/NEGATIVO para prueba rapida, REACTIVO/NO REACTIVO para VDRL.
+  // Pasar de uno a otro no cambia el resultado, solo la palabra.
   const EQUIV = {
     POSITIVO: 'REACTIVO', NEGATIVO: 'NO REACTIVO',
     REACTIVO: 'POSITIVO', 'NO REACTIVO': 'NEGATIVO',
@@ -178,49 +241,19 @@ export function aplicarCruzadas(fila, add, pend, opciones) {
 
     const v = EQUIV[fila[res]];
     if (v && admitidos.includes(v)) {
-      add(res, v, `Con estudio ${fila[tipo]} el resultado se expresa como ${v}`);
+      add(res, v, `Mismo resultado con la palabra que el instructivo usa para ${fila[tipo]}: ${v}`, 'formato');
       fila[res] = v;
     } else {
       pend(res, `El resultado "${fila[res]}" no corresponde al tipo de estudio ${fila[tipo]}`);
     }
   }
 
-  reubicarPruebasVih(fila, add, pend);
-  quitarControlesDuplicados(fila, add);
-
-  // Modalidad de consulta faltante cuando hay fecha de control.
-  for (const c of CAMPOS) {
-    if (!c.vals || !c.vals.includes('TELECONSULTA')) continue;
-    const padre = c.x?.cond?.[1];
-    if (!padre || !fila[padre] || fila[c.key]) continue;
-
-    if (opciones.tipoConsultaPorDefecto) {
-      add(c.key, opciones.tipoConsultaPorDefecto,
-        `Hay fecha en ${POR_KEY[padre].nombre} pero no modalidad: se asume ${opciones.tipoConsultaPorDefecto}`);
-      fila[c.key] = opciones.tipoConsultaPorDefecto;
-    } else {
-      pend(c.key, `Falta la modalidad y hay fecha en ${POR_KEY[padre].nombre}`);
-    }
-  }
-
-  // Preguntas de tamizaje obligatorias en blanco.
-  if (opciones.negativosPorDefecto) {
-    for (const c of CAMPOS) {
-      if (c.req !== 'SI' || fila[c.key] || c.tipo !== 'T' || !c.vals) continue;
-      if (c.vals.length === 2 && c.vals.includes('SI') && c.vals.includes('NO')) {
-        add(c.key, 'NO', 'Campo obligatorio en blanco: se asume NO al no haber registro afirmativo');
-        fila[c.key] = 'NO';
-      }
-    }
-  }
+  revisarTrimestreVih(fila, pend);
+  revisarControlesDuplicados(fila, pend);
 }
 
 /**
  * Contrasta la FUM con la semana gestacional registrada al ingreso.
- *
- * La FUM no se corrige sola: de ella dependen la FPP, la edad gestacional y
- * todas las validaciones de fechas del reporte, asi que cambiarla por una
- * estimacion podria alterar el sentido clinico del registro.
  *
  * Solo se llama cuando alguna fecha de la fila quedo fuera de orden, porque una
  * FUM equivocada suele ser la causa raiz de esos conflictos. Pequenas
@@ -244,32 +277,27 @@ export function verificarFum(fila, pend) {
 }
 
 /**
- * Corrige la FUM cuando la registrada es imposible.
+ * Señala la FUM imposible: una gestacion de mas de 42 semanas a la fecha de
+ * atencion, o una FUM posterior a la atencion.
  *
- * La FUM no se toca por sospechas: de ella dependen la FPP, la edad gestacional
- * y todas las validaciones de fechas. Pero cuando implica una gestacion de mas
- * de 42 semanas, el dato no es dudoso sino imposible, y el validador rechaza la
- * fila entera por las incoherencias que arrastra.
- *
- * En ese caso se reconstruye a partir de la semana gestacional registrada, que
- * es el otro dato del propio archivo que fija la edad del embarazo. El cambio
- * queda en el reporte de correcciones para poder cotejarlo con la historia
- * clinica.
+ * No se reconstruye: de la FUM dependen la FPP, la edad gestacional y todas
+ * las validaciones de fechas. Se sugiere la que corresponde a la semana
+ * gestacional registrada, para cotejarla con la historia clinica.
  */
-function corregirFumImposible(fila, add) {
+function revisarFumImposible(fila, pend) {
   const semana = aFloat(fila.semana_gestacional);
   const referencia = fila.fecha_ingreso_programa || fila.fecha_ingreso_riamp;
   if (!fila.fum || !referencia || semana === null || semana <= 0) return;
 
   const semanasReales = fechas.difDias(referencia, fila.fum) / 7;
-  // Se actua solo ante lo imposible: gestacion de mas de 42 semanas, o una FUM
-  // posterior a la atencion.
   if (semanasReales <= 42 && semanasReales >= 0) return;
 
   const derivada = fechas.sumarDias(referencia, -Math.round(semana * 7));
-  add('fum', derivada,
-    `La FUM ${fila.fum} implica ${semanasReales.toFixed(1)} semanas de gestacion al ${referencia}, imposible en un embarazo. Reconstruida a partir de la semana gestacional ${semana} registrada. Verificar contra la historia clinica`);
-  fila.fum = derivada;
+  pend('fum',
+    `La FUM ${fila.fum} implica ${semanasReales.toFixed(1)} semanas de gestación al ${referencia}, ` +
+    `imposible en un embarazo. Con la semana gestacional registrada (${semana}) sería ${derivada}. ` +
+    'Verifícala en la historia clínica',
+    'incoherente', derivada);
 }
 
 /** Campos que forman el bloque de tamizaje de VIH de cada trimestre. */
@@ -291,15 +319,14 @@ function trimestreDe(fecha, fum) {
 }
 
 /**
- * Mueve el tamizaje de VIH al trimestre que corresponde a su fecha.
+ * Señala el tamizaje de VIH reportado en las columnas de otro trimestre.
  *
- * El validador comprueba que la prueba reportada como de primer trimestre se
- * haya tomado dentro del primer trimestre. Cuando la fecha cae mas adelante, el
- * dato no esta mal: esta en la columna equivocada. Trasladarlo no inventa nada,
- * solo lo pone donde el instructivo lo espera. Si el trimestre de destino ya
- * tiene datos, no se toca y se reporta para revision manual.
+ * El validador comprueba que la prueba del trimestre 1 se haya tomado en el
+ * trimestre 1. Cuando la fecha cae mas adelante, lo mas probable es que el dato
+ * este en la columna equivocada, pero tambien puede estar mal la fecha o la
+ * FUM: se indica a donde iria y lo decide una persona.
  */
-function reubicarPruebasVih(fila, add, pend) {
+function revisarTrimestreVih(fila, pend) {
   if (!fila.fum) return;
 
   for (const origen of [1, 2, 3]) {
@@ -313,23 +340,14 @@ function reubicarPruebasVih(fila, add, pend) {
     }
     if (destino === origen) continue;
 
-    const d = BLOQUE_VIH(destino);
-    const ocupado = Object.values(d).some(k => fila[k]);
-    if (ocupado) {
-      pend(o.fecha,
-        `La prueba se tomo en el trimestre ${destino} pero esta reportada como del trimestre ${origen}, y el trimestre ${destino} ya tiene datos. Reubicarla a mano`);
-      continue;
-    }
-
     const sem = (fechas.difDias(fila[o.fecha], fila.fum) / 7).toFixed(1);
-    for (const clave of Object.keys(o)) {
-      if (!fila[o[clave]]) continue;
-      add(d[clave], fila[o[clave]],
-        `Trasladado desde el trimestre ${origen}: la prueba se tomo en la semana ${sem}, que corresponde al trimestre ${destino}`);
-      fila[d[clave]] = fila[o[clave]];
-      add(o[clave], '', `Trasladado al trimestre ${destino}`);
-      fila[o[clave]] = '';
-    }
+    const ocupado = Object.values(BLOQUE_VIH(destino)).some(k => fila[k]);
+    pend(o.fecha,
+      `La prueba se tomó en la semana ${sem}, que es del trimestre ${destino}, pero está en las ` +
+      `columnas del trimestre ${origen}. ` +
+      (ocupado
+        ? `El trimestre ${destino} ya tiene datos: revisa cuál prueba va en cada uno`
+        : `Si la fecha es correcta, pasa las cinco columnas de VIH ${origen} a las de VIH ${destino}`));
   }
 }
 
@@ -347,44 +365,27 @@ const SERIES_CONTROL = [
    'fecha_curso_paternidad7'],
 ];
 
-/** Campos que dependen de un control y deben vaciarse junto a el. */
-const DEPENDIENTES = {
-  control_gineco1: 'tipo_gineco1', control_gineco2: 'tipo_gineco2',
-  control_gineco3: 'tipo_gineco3', control_gineco4: 'tipo_gineco4',
-  control_gineco5: 'tipo_gineco5', control_gineco6: 'tipo_gineco6',
-  control_gineco7: 'tipo_gineco7',
-  primera_vez_med_general: 'tipo_med_general1', control2_med_general: 'tipo_med_general2',
-  control_nutricion1: 'tipo_nutricion1', control_nutricion2: 'tipo_nutricion2',
-  control_psicologia1: 'tipo_psicologia1', control_psicologia2: 'tipo_psicologia2',
-  control_perinatologo1: 'tipo_perinatologo1', control_perinatologo2: 'tipo_perinatologo2',
-};
-
 /**
- * Elimina controles repetidos con la misma fecha que el anterior de su serie.
+ * Señala controles con la misma fecha que otro anterior de su serie.
  *
- * El validador exige que cada control sea posterior al anterior, asi que dos
- * registros con identica fecha lo rechazan. Una atencion no puede figurar dos
- * veces el mismo dia con el mismo profesional: es un duplicado de digitacion, y
- * borrar la copia no elimina informacion real.
+ * El validador exige cada control posterior al anterior. Lo habitual es que
+ * sea la misma atencion digitada dos veces, pero no se borra: se sugiere
+ * dejarlo vacio y lo confirma una persona.
  */
-function quitarControlesDuplicados(fila, add) {
+function revisarControlesDuplicados(fila, pend) {
   for (const serie of SERIES_CONTROL) {
     for (let i = 1; i < serie.length; i++) {
       const actual = serie[i];
       if (!fila[actual]) continue;
 
-      const repetido = serie.slice(0, i).some(k => fila[k] && fila[k] === fila[actual]);
-      if (!repetido) continue;
+      const previo = serie.slice(0, i).find(k => fila[k] && fila[k] === fila[actual]);
+      if (!previo) continue;
 
-      add(actual, '',
-        `Duplicado: ya hay un control con la fecha ${fila[actual]} y el sistema los exige en dias distintos`);
-      fila[actual] = '';
-
-      const dep = DEPENDIENTES[actual];
-      if (dep && fila[dep]) {
-        add(dep, '', 'Se vacia junto con el control duplicado');
-        fila[dep] = '';
-      }
+      pend(actual,
+        `Tiene la misma fecha (${fila[actual]}) que ${POR_KEY[previo].nombre}, y cada control debe ser ` +
+        'posterior al anterior. Si es la misma atención registrada dos veces, deja vacío este control ' +
+        'y su tipo de consulta',
+        'incoherente', '');
     }
   }
 }
@@ -446,7 +447,26 @@ export function verificarRangos(fila, pend) {
   }
 }
 
-/** Campos obligatorios que quedaron sin dato y no tienen centinela. */
+/**
+ * Longitud maxima del instructivo.
+ *
+ * Se omiten los campos de catalogo y con decimales: en 14 de ellos la longitud
+ * declarada choca con los propios valores permitidos (Riesgo: 2, pero admite
+ * ALTO) y ahi manda el catalogo. Ver README, "Discrepancias del instructivo".
+ */
+export function verificarLongitudes(fila, pend) {
+  for (const c of CAMPOS) {
+    const v = fila[c.key];
+    if (!v || c.vals || c.x?.dec || c.tipo === 'F') continue;
+    if (v.length > c.len) {
+      pend(c.key,
+        `Tiene ${v.length} caracteres y el instructivo permite máximo ${c.len}. ` +
+        'No se recorta: habría que decidir qué parte sobra');
+    }
+  }
+}
+
+/** Campos obligatorios que quedaron sin dato. */
 export function verificarObligatorios(fila, pend) {
   for (const c of CAMPOS) {
     if (fila[c.key]) continue;

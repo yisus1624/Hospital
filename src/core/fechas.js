@@ -25,7 +25,41 @@ export function iso(a, m, d) {
  * fechas con hora y el numero de serie de Excel.
  * Devuelve null si el texto no es una fecha interpretable.
  */
-export function normalizar(bruto) {
+/**
+ * Decide el orden de una fecha con barras a partir de la evidencia del archivo.
+ *
+ * `13/02/2026` solo puede ser dia/mes. `02/13/2026` solo puede ser mes/dia.
+ * Cuando los dos numeros son <= 12 la fecha es ambigua y hay que decidir por el
+ * resto del archivo: `orden` lleva lo que se dedujo en `detectarOrdenFechas`.
+ */
+const ORDEN_POR_DEFECTO = 'dmy';
+
+/**
+ * Recorre textos de fecha y deduce si el archivo viene en dia/mes o mes/dia.
+ *
+ * Solo cuenta la evidencia inequivoca: un primer numero > 12 prueba dia/mes, un
+ * segundo numero > 12 prueba mes/dia. Si no hay evidencia, o si hay de las dos
+ * clases (archivo inconsistente), se mantiene dia/mes, que es lo que escribe
+ * Excel en configuracion regional española.
+ *
+ * @returns {{orden: 'dmy'|'mdy', dmy: number, mdy: number, conflicto: boolean,
+ *            ambiguas: number}}
+ */
+export function detectarOrdenFechas(textos) {
+  let dmy = 0, mdy = 0, ambiguas = 0;
+  for (const t of textos) {
+    const m = limpiar(t).split(/[T ]/)[0].match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+    if (!m) continue;
+    const a = +m[1], b = +m[2];
+    if (a > 12 && b <= 12) dmy++;
+    else if (b > 12 && a <= 12) mdy++;
+    else if (a <= 12 && b <= 12) ambiguas++;
+  }
+  const conflicto = dmy > 0 && mdy > 0;
+  return { orden: (!conflicto && mdy > 0) ? 'mdy' : ORDEN_POR_DEFECTO, dmy, mdy, conflicto, ambiguas };
+}
+
+export function normalizar(bruto, orden = ORDEN_POR_DEFECTO) {
   const s = limpiar(bruto);
   if (!s || esVacio(s)) return null;
 
@@ -47,11 +81,18 @@ export function normalizar(bruto) {
     return fechaValida(a, me, d) ? iso(a, me, d) : null;
   }
 
-  // DD-MM-AAAA. Si el primer numero no puede ser dia, se asume MM/DD.
+  // DD-MM-AAAA (o MM-DD-AAAA si el archivo demostro venir en ese orden).
+  //
+  // Cuando uno de los dos numeros pasa de 12 no hay ambiguedad: ese es el dia.
+  // Cuando los dos son <= 12 la fecha es ambigua y manda `orden`, que se
+  // deduce del resto del archivo. Sin esto, un CSV guardado por un Excel en
+  // configuracion regional inglesa (mm/dd/aaaa) intercambiaria dia y mes en
+  // silencio en todas las fechas del 1 al 12.
   if ((m = soloFecha.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/))) {
     let [d, me, a] = [+m[1], +m[2], +m[3]];
     if (d > 12 && me > 12) return null;
     if (d <= 12 && me > 12) [d, me] = [me, d];
+    else if (d <= 12 && me <= 12 && orden === 'mdy') [d, me] = [me, d];
     return fechaValida(a, me, d) ? iso(a, me, d) : null;
   }
 
