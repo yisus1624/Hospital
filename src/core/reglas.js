@@ -21,12 +21,31 @@ import * as fechas from './fechas.js';
 
 export const NA_FECHA = fechas.NA_FECHA;
 
-/** Evalua una condicion de obligatoriedad declarada en el esquema. */
+/**
+ * Evalua una condicion de obligatoriedad declarada en el esquema.
+ *
+ * Matiz importante en las condiciones de tipo 'lleno': cuando el campo del que
+ * se depende es una pregunta de SI/NO y la respuesta es NO, la condicion NO se
+ * cumple. El instructivo dice "solo si el campo X esta diligenciado", pero un
+ * "NO" significa que el examen no se hizo, y entonces no hay fecha ni resultado
+ * que registrar. El validador de la plataforma lo entiende asi: con
+ * Urocultivo_post3 en NO no reclama la fecha. Sin este matiz el informe llenaba
+ * de avisos falsos campos que el sistema acepta perfectamente.
+ */
+const NEGATIVAS = new Set(['NO', 'NO SE REALIZA TAMIZAJE']);
+
 export function cumple(cond, fila) {
   if (!cond) return true;
   const [tipo, key, vals] = cond;
   const v = fila[key];
-  if (tipo === 'lleno') return v !== undefined && v !== '';
+  if (tipo === 'lleno') {
+    if (v === undefined || v === '') return false;
+    const padre = POR_KEY[key];
+    const esSiNo = padre?.vals?.length === 2
+      && padre.vals.includes('SI') && padre.vals.includes('NO');
+    if (esSiNo && NEGATIVAS.has(String(v).toUpperCase())) return false;
+    return true;
+  }
   if (tipo === 'igual') return vals.some(x => String(x) === String(v));
   return true;
 }
@@ -160,9 +179,15 @@ export function limpiarNoAplicables(fila, add, pend) {
       fila[c.key] = '';
       continue;
     }
+    // Ojo: aqui el problema NO es que falte un dato, es que sobra. El
+    // instructivo dice que este campo va vacio mientras la condicion no se
+    // cumpla, asi que la salida es borrarlo (o corregir el campo del que
+    // depende). Se marca con tipo propio para que el informe no lo presente
+    // como "te falta llenar esto", que es justo lo contrario.
     pend(c.key,
-      `Solo se diligencia si ${describir(c.x.cond)}, y ${padre.nombre} es "${actual}". ` +
-      `Si este dato es correcto, corrige ${padre.nombre}; si no, deja este campo vacío`);
+      `Según el instructivo este campo solo se diligencia si ${describir(c.x.cond)}, ` +
+      `y ${padre.nombre} es "${actual}". O se deja esta celda vacía, o se corrige ${padre.nombre}`,
+      'sobra', '');
   }
 }
 
@@ -209,6 +234,12 @@ export function aplicarCruzadas(fila, add, pend) {
           `de las 42 semanas siguientes. Por Naegele sería ${naegele}. Revisa si el error está en la ` +
           'FPP o en la FUM',
           'incoherente', naegele);
+        // La regla ata las dos fechas, y la plataforma reporta el error unas
+        // veces sobre la FPP y otras sobre la FUM. Se marcan las dos para que
+        // quien revise vea el par completo y no busque una celda que esta bien.
+        pend('fum',
+          `No concuerda con la FPP (${fila.fpp}): entre las dos hay ${d} días, y el embarazo va de 0 a ` +
+          '42 semanas. Revisa cuál de las dos fechas está mal en la historia clínica');
       }
     }
   }
@@ -411,6 +442,20 @@ export function verificarFechas(fila, pend) {
 
     if (c.x?.no_futura && v > hoy) {
       pend(c.key, `La fecha ${v} es posterior a hoy (${hoy})`);
+    }
+
+    // Hay fechas que pueden ser anteriores a la FUM porque corresponden a algo
+    // previo al embarazo (una vacuna puesta antes de quedar en embarazo). El
+    // instructivo pide que sean posteriores a la FUM, pero la plataforma las
+    // acepta hasta cierta antiguedad y solo rechaza mas alla de ese limite.
+    if (c.x?.antes_fum_max_anios !== undefined && fila.fum) {
+      const anios = fechas.difDias(fila.fum, v) / 365.25;
+      if (anios > c.x.antes_fum_max_anios) {
+        pend(c.key,
+          `Es ${anios.toFixed(1)} años anterior a la FUM (${fila.fum}), y el máximo son ` +
+          `${c.x.antes_fum_max_anios} años`);
+      }
+      continue;
     }
 
     const estricto = c.x?.sec === true;

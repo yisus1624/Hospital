@@ -167,6 +167,16 @@ export function iniciarErrores({ estado: obtenerEstado, leerTexto, escapar, repr
       partes.push('Descárgalo y súbelo de nuevo a la plataforma tal como sale, sin abrirlo.');
       cierre.className = 'cierre-errores resuelto';
     }
+    // Explicar POR QUE la cifra no baja: es la duda que salta al ver 0 resueltos.
+    const estado = obtenerEstado();
+    const arreglables = estado ? estado.cambios.length : 0;
+    partes.push(arreglables
+      ? `SIRA corrigió ${arreglables} celdas de formato y códigos del instructivo, y eso resolvió ${r.corregidos} de los errores.`
+      : 'SIRA no resolvió ninguno porque este archivo no traía errores de formato: '
+        + 'ninguno de los 248 campos estaba mal escrito. Los que quedan son datos que faltan '
+        + 'o que se contradicen entre sí, y esos no bajan hasta que una persona los complete '
+        + 'con la historia clínica.');
+
     if (colgados) {
       partes.push(
         `Otros ${colgados} ${colgados === 1 ? 'tipo depende' : 'tipos dependen'} de un campo que ` +

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SIRA — Revisión de archivos SMH</title>
 <meta name="description" content="Valida y corrige archivos SMH segun el Instructivo V5 antes de subirlos al sistema de salud. Procesamiento local, sin envio de datos.">
-<link rel="stylesheet" href="src/ui/estilos.css?v=17">
+<link rel="stylesheet" href="src/ui/estilos.css?v=24">
 <link rel="icon" href="src/ui/logo-hospital.jpg">
 </head>
 <body>
@@ -530,6 +530,52 @@
   </div>
 </dialog>
 
+<!-- Informe previo a la descarga: nunca bloquea, solo avisa. -->
+<dialog id="dlgAntes" class="dialogo">
+  <div class="dialogo-cabecera">
+    <div>
+      <h2>Informe antes de descargar</h2>
+      <p class="dialogo-subtitulo" id="antesArchivo"></p>
+    </div>
+    <button class="icono-redondo" id="btnCerrarAntes" aria-label="Cerrar">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+           stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+
+  <div class="dialogo-cuerpo">
+    <!-- 1. Lo que el instructivo sí resuelve, y ya está hecho. -->
+    <section class="antes-bloque hecho">
+      <h3><span class="antes-icono" aria-hidden="true">✓</span> Lo que SIRA ya corrigió</h3>
+      <p id="antesHecho"></p>
+    </section>
+
+    <!-- 2. Lo que el instructivo no puede resolver. -->
+    <section class="antes-bloque pendiente" id="antesBloquePendiente">
+      <h3><span class="antes-icono" aria-hidden="true">!</span> <span id="antesFaltaTitulo"></span></h3>
+      <p class="antes-intro">
+        <strong>El instructivo no puede hacer esto por ti.</strong> Son datos que no están
+        en el archivo o que se contradicen entre sí, y deducirlos significaría inventar
+        información clínica de una gestante. Si descargas el archivo así, el sistema de
+        salud rechazará estas filas.
+      </p>
+      <div class="antes-vistas" role="group" aria-label="Cómo ver la lista">
+        <button type="button" class="antes-vista activa" data-vista-informe="campo">Agrupado por campo</button>
+        <button type="button" class="antes-vista" data-vista-informe="gestante">Gestante por gestante</button>
+      </div>
+      <div class="antes-lista" id="antesLista"></div>
+    </section>
+  </div>
+
+  <div class="dialogo-pie">
+    <button class="btn texto" id="btnAntesLista">Descargar la lista en Excel</button>
+    <span class="crece"></span>
+    <button class="btn" id="btnAntesVolver">Volver y completar</button>
+    <button class="btn primario" id="btnAntesDescargar">Descargar de todos modos</button>
+  </div>
+</dialog>
+
+
 <footer class="pie-pagina">
   <img src="src/ui/logo-hospital.jpg" alt="" aria-hidden="true"
          onerror="this.onerror=null; this.src='src/ui/logo-hospital.svg';">
@@ -568,6 +614,6 @@ if (location.protocol === 'file:') {
 }
 </script>
 
-<script type="module" src="src/ui/app.js?v=17"></script>
+<script type="module" src="src/ui/app.js?v=24"></script>
 
 </html>

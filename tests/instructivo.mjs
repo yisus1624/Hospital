@@ -65,6 +65,10 @@ const DESVIACIONES = {
   200: { clase: 'errata', campo: 'condicion',
     motivo: 'El instructivo dice que depende de "Control nutricion 2", pero es la alteracion nutricional ' +
             'de la consulta 1 y los campos vecinos (199 y 202) siguen el patron 1->1 y 2->2. Se usa el control 1.' },
+  71: { clase: 'validador', campo: 'fecha',
+    motivo: 'El instructivo pide que la fecha de la antitetanica sea posterior a la FUM, pero la vacuna ' +
+            'suele ponerse antes del embarazo. El reporte de la plataforma lo dice: "fecha_antitetanica si ' +
+            'es menor a la fum no puede ser superior a 5 años". Se admite anterior, hasta 5 años.' },
   111: { clase: 'validador', campo: 'longitud',
     motivo: 'Longitud declarada 1, pero los propios valores permitidos son PRUEBA RAPIDA y VDRL. Manda el catalogo.' },
   127: { clase: 'validador', campo: 'longitud',
@@ -171,6 +175,7 @@ comprobar(futuraMal.length === 0,
 const fumMal = instructivo.filter(f => {
   const e = porNum.get(f.num);
   if (e.tipo !== 'F') return false;
+  if (desviado(f.num, 'fecha')) return false;
   return /superior a la fum/.test(sinTildes(f.nota)) && !(e.x?.mayor_que || []).includes('fum');
 });
 comprobar(fumMal.length === 0,
@@ -205,8 +210,8 @@ for (const [num, d] of Object.entries(DESVIACIONES)) {
   console.log(dim(`        ${num} ${c.nombre} · ${d.clase} · ${d.campo}`));
   console.log(dim(`           ${d.motivo}`));
 }
-comprobar(Object.keys(DESVIACIONES).length === 7,
-  'Las desviaciones respecto al documento son las 7 declaradas, ni una mas');
+comprobar(Object.keys(DESVIACIONES).length === 8,
+  'Las desviaciones respecto al documento son las 8 declaradas, ni una mas');
 
 // ---------------------------------------------------------------------------
 

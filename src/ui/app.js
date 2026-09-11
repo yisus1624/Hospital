@@ -9,6 +9,7 @@ import {
   nombreArchivo, componerNombre, validarNombre,
 } from '../core/archivo.js';
 import { procesar } from '../core/corrector.js';
+import { AYUDA } from '../core/ayuda.js';
 import { iniciarEditor } from './editor.js';
 import { iniciarErrores } from './errores.js';
 
@@ -398,6 +399,7 @@ const paginas = {
 /** Etiqueta que distingue si el dato falta, es incoherente o no se entiende. */
 const ETIQUETA_TIPO = {
   falta: ['falta', 'Falta el dato'],
+  sobra: ['invalido', 'Sobra el dato'],
   incoherente: ['incoherente', 'No concuerda'],
   invalido: ['invalido', 'No se entiende'],
 };
@@ -625,10 +627,289 @@ function descargar(contenido, nombre) {
   URL.revokeObjectURL(url);
 }
 
+
+// ---------------------------------------------------------------------------
+// Informe previo a la descarga
+//
+// La descarga NUNCA se bloquea por campos sin resolver: el archivo es del
+// hospital y quien decide es quien lo va a subir. Lo que si se hace es
+// decirle, antes de bajarlo, exactamente que le falta y en que filas, para que
+// baje sabiendo que el sistema rechazara esas filas.
+// ---------------------------------------------------------------------------
+
+const ETIQUETA_MOTIVO = {
+  falta: ['falta', 'Falta el dato'],
+  sobra: ['invalido', 'Sobra el dato'],
+  incoherente: ['incoherente', 'No concuerda'],
+  invalido: ['invalido', 'No se entiende'],
+};
+
+/**
+ * Agrupa los pendientes por campo y por motivo.
+ *
+ * Dos celdas del mismo campo pueden fallar por razones distintas (a una le
+ * falta el dato y otra se contradice con otro campo), asi que la clave del
+ * grupo incluye el motivo: si no, el informe diria una cosa y pasaria otra.
+ */
+function agruparPendientes(pendientes) {
+  const mapa = new Map();
+  for (const p of pendientes) {
+    const clave = `${p.campo}||${p.motivo}`;
+    if (!mapa.has(clave)) {
+      mapa.set(clave, {
+        campo: p.campo, nombre: p.nombre, tipo: p.tipo, motivo: p.motivo,
+        filas: [], sugerido: p.sugerido, valor: p.valor,
+      });
+    }
+    mapa.get(clave).filas.push(p.fila);
+  }
+  // Primero lo que falta (mas facil de resolver), y dentro de eso lo que mas
+  // gestantes afecta.
+  const orden = { falta: 0, incoherente: 1, invalido: 2 };
+  return [...mapa.values()].sort((a, b) =>
+    (orden[a.tipo] ?? 3) - (orden[b.tipo] ?? 3) || b.filas.length - a.filas.length);
+}
+
+/** Titulo y explicacion de cada clase de problema. */
+const SECCIONES = [
+  ['sobra', 'Datos que sobran — hay que borrarlos',
+   'Estos campos NO son obligatorios en este caso: el instructivo dice que van vacíos, y el archivo los trae llenos. Se resuelven borrando el contenido de la celda (o corrigiendo el campo del que dependen). No hay que buscar ningún dato.'],
+  ['falta', 'Campos vacíos — hay que llenarlos',
+   'Están en blanco y el instructivo sí los exige en este caso. Hay que buscar el dato en la historia clínica.'],
+  ['incoherente', 'Datos que se contradicen',
+   'El dato existe, pero choca con otro campo de la misma gestante. Hay que decidir cuál de los dos está mal.'],
+  ['invalido', 'Valores que no se entienden',
+   'Lo que trae la celda no es un valor válido para ese campo. La celda va vacía en la descarga y el valor original se conserva aquí.'],
+];
+
+/** Cómo se está mirando el informe: agrupado por campo o fila por fila. */
+let vistaInforme = 'campo';
+
+/** Identifica a la gestante de una fila, para poder buscar su historia. */
+function quienEs(nFila) {
+  const f = estado.filas[nFila - 2];
+  if (!f) return `Fila ${nFila}`;
+  const doc = [f.tipo_id, f.documento].filter(Boolean).join(' ');
+  const nombre = ['nombre1', 'nombre2', 'apellido1', 'apellido2']
+    .map(k => f[k]).filter(v => v && v !== 'NONE').join(' ');
+  return [`Fila ${nFila}`, doc, nombre].filter(Boolean).join(' · ');
+}
+
+/**
+ * La instruccion concreta, en imperativo y con el valor cuando se conoce.
+ *
+ * Esto es lo primero que lee quien va a llenar el dato, asi que va sin jerga:
+ * "Cambia el 1 por 2" antes que "la variable gravida no coincide con la suma".
+ * El porque va debajo, mas pequeño.
+ */
+function queHacer(p) {
+  const a = AYUDA[p.campo];
+  const padre = a?.padre;
+  const donde = padre ? `«${padre.nombre}» (columna ${padre.excel})` : 'el campo del que depende';
+
+  if (p.tipo === 'sobra') {
+    return `Borra lo que hay en esta celda y déjala vacía. Si el dato es correcto, ` +
+           `entonces lo que hay que corregir es ${donde}.`;
+  }
+  if (p.tipo === 'invalido') {
+    return `Borra «${p.valor}» y escribe un valor válido.`;
+  }
+  if (p.sugerido !== undefined && p.sugerido !== '') {
+    return p.valor
+      ? `Cambia «${p.valor}» por «${p.sugerido}», si la historia clínica lo confirma.`
+      : `Escribe «${p.sugerido}», si la historia clínica lo confirma.`;
+  }
+  if (p.sugerido === '') return 'Deja esta celda vacía.';
+  if (p.tipo === 'falta') {
+    return a?.es ? `Busca en la historia clínica ${a.es} y escríbelo aquí.`
+                 : 'Busca el dato en la historia clínica y escríbelo aquí.';
+  }
+  return 'Revisa este dato con la historia clínica y corrige el que esté mal.';
+}
+
+/** El formato que admite la celda, con un ejemplo. */
+function comoEscribir(campo) {
+  const a = AYUDA[campo];
+  if (!a) return '';
+  return a.ej ? `${a.como} Ejemplo: ${a.ej}` : a.como;
+}
+
+/** Vista fila por fila: todo lo que le falta a cada gestante, junto. */
+function listaPorGestante(pendientes) {
+  const porFila = new Map();
+  for (const p of pendientes) {
+    if (!porFila.has(p.fila)) porFila.set(p.fila, []);
+    porFila.get(p.fila).push(p);
+  }
+  const orden = { sobra: 0, falta: 1, incoherente: 2, invalido: 3 };
+  return [...porFila.entries()].sort((a, b) => a[0] - b[0]).map(([fila, suyos]) => {
+    // Nueve campos con el mismo problema y la misma solucion se leen como una
+    // sola instruccion, no como nueve avisos repetidos.
+    const juntos = new Map();
+    for (const p of suyos.sort((a, b) => (orden[a.tipo] ?? 9) - (orden[b.tipo] ?? 9))) {
+      const k = `${p.tipo}||${p.motivo}||${queHacer(p)}`;
+      if (!juntos.has(k)) juntos.set(k, []);
+      juntos.get(k).push(p);
+    }
+    const items = [...juntos.values()].map(ps => {
+      const p = ps[0];
+      const [clase, etiqueta] = ETIQUETA_MOTIVO[p.tipo] ?? ETIQUETA_MOTIVO.incoherente;
+      const cols = ps.map(x => AYUDA[x.campo]?.excel).filter(Boolean);
+      const titulo = ps.length === 1
+        ? escapar(p.nombre)
+        : `${escapar(ps.length)} campos: ${ps.map(x => escapar(x.nombre)).join(', ')}`;
+      const donde = cols.length
+        ? `<span class="antes-cuenta">columna${cols.length > 1 ? 's' : ''} ${escapar(cols.join(', '))}</span>`
+        : '';
+      return `<li>
+        <div class="antes-cab">
+          <span class="antes-campo">${titulo}</span>
+          <span class="marca-tipo ${clase}">${etiqueta}</span>
+          ${donde}
+        </div>
+        ${p.tipo === 'falta' && AYUDA[p.campo]?.es
+          ? `<p class="antes-que"><b>Qué falta:</b> ${escapar(AYUDA[p.campo].es)}</p>` : ''}
+        <p class="antes-hacer"><b>Qué hacer:</b> ${escapar(ps.length > 1
+          ? queHacer(p).replace('esta celda', `estas ${ps.length} celdas`).replace('déjala vacía', 'déjalas vacías')
+          : queHacer(p))}</p>
+        ${p.tipo !== 'sobra' ? `<p class="antes-formato"><b>Formato:</b> ${escapar(comoEscribir(p.campo))}</p>` : ''}
+        <p class="antes-porque"><b>Por qué:</b> ${escapar(p.motivo)}</p>
+      </li>`;
+    }).join('');
+    return `<div class="antes-gestante">
+      <div class="antes-gestante-cab">
+        <strong>${escapar(quienEs(fila))}</strong>
+        <span class="antes-seccion-n">${suyos.length} ${suyos.length === 1 ? 'dato' : 'datos'}</span>
+      </div>
+      <ul class="antes-items">${items}</ul>
+    </div>`;
+  }).join('');
+}
+
+/** Vista agrupada por campo: util para arreglar lo mismo en muchas filas. */
+function listaPorCampo(pendientes) {
+  const grupos = agruparPendientes(pendientes);
+  return SECCIONES.map(([tipo, titulo, explicacion]) => {
+    const suyos = grupos.filter(g => g.tipo === tipo);
+    if (!suyos.length) return '';
+    const cuantos = suyos.reduce((n, g) => n + g.filas.length, 0);
+    return `<div class="antes-seccion">
+      <div class="antes-seccion-cab">
+        <span class="marca-tipo ${ETIQUETA_MOTIVO[tipo][0]}">${ETIQUETA_MOTIVO[tipo][1]}</span>
+        <strong>${escapar(titulo)}</strong>
+        <span class="antes-seccion-n">${cuantos}</span>
+      </div>
+      <p class="antes-seccion-txt">${escapar(explicacion)}</p>
+      ${suyos.map(fichaGrupo).join('')}
+    </div>`;
+  }).join('');
+}
+
+function pintarListaInforme() {
+  $('antesLista').innerHTML = vistaInforme === 'gestante'
+    ? listaPorGestante(estado.pendientes)
+    : listaPorCampo(estado.pendientes);
+  for (const btn of document.querySelectorAll('[data-vista-informe]')) {
+    btn.classList.toggle('activa', btn.dataset.vistaInforme === vistaInforme);
+  }
+}
+
+document.addEventListener('click', e => {
+  const btn = e.target.closest('[data-vista-informe]');
+  if (!btn || !estado) return;
+  vistaInforme = btn.dataset.vistaInforme;
+  pintarListaInforme();
+  $('antesLista').scrollTop = 0;
+});
+
+function abrirInformePrevio() {
+  const { pendientes, cambios, resumen, partes } = estado;
+
+  $('antesArchivo').textContent = componerNombre(partes);
+
+  // --- 1. Lo que ya se corrigió -------------------------------------------
+  const formato = cambios.filter(c => c.tipo === 'formato').length;
+  const codigos = cambios.filter(c => c.tipo === 'instructivo').length;
+  const trozos = [];
+  if (formato) trozos.push(`<strong>${formato}</strong> ${formato === 1 ? 'dato reescrito' : 'datos reescritos'} en el formato del instructivo (espacios, tildes, fechas, valores de catálogo)`);
+  if (codigos) trozos.push(`<strong>${codigos}</strong> ${codigos === 1 ? 'celda vacía completada' : 'celdas vacías completadas'} con el código que el instructivo prescribe para ese caso`);
+  $('antesHecho').innerHTML = trozos.length
+    ? `${trozos.join(' y ')}. Todo queda listado en la pestaña «Correcciones».`
+    : 'Nada: el archivo ya venía con el formato y los códigos del instructivo correctos. '
+      + 'No había ningún error de forma que corregir.';
+
+  // --- 2. Lo que falta por completar ---------------------------------------
+  const bloque = $('antesBloquePendiente');
+  bloque.hidden = pendientes.length === 0;
+  if (!pendientes.length) { $('dlgAntes').showModal(); return; }
+
+  const gestantes = resumen.filasConPendientes;
+  const sobran = pendientes.filter(p => p.tipo === 'sobra').length;
+  $('antesFaltaTitulo').textContent =
+    `${pendientes.length} ${pendientes.length === 1 ? 'dato' : 'datos'} por revisar ` +
+    `en ${gestantes} ${gestantes === 1 ? 'gestante' : 'gestantes'}` +
+    (sobran ? ` · ${sobran} de ellos solo hay que borrarlos` : '');
+
+  pintarListaInforme();
+  $('dlgAntes').showModal();
+}
+
+/**
+ * Una ficha por campo y motivo, escrita para quien va a llenar el dato.
+ *
+ * Tres cosas, en este orden: DONDE esta (columna y filas), QUE pasa, y COMO se
+ * llena segun el instructivo. La columna se da con la letra de Excel porque es
+ * lo que ve quien abre el archivo.
+ */
+function fichaGrupo(g) {
+  const filas = [...new Set(g.filas)].sort((a, b) => a - b);
+  const muestra = filas.slice(0, 15).join(', ') + (filas.length > 15 ? ` y ${filas.length - 15} más` : '');
+  const cuantas = filas.length === 1 ? '1 gestante' : `${filas.length} gestantes`;
+  const ayuda = AYUDA[g.campo] ?? null;
+
+  return `<div class="antes-fila">
+    <div class="antes-cab">
+      <span class="antes-campo">${escapar(g.nombre)}</span>
+      <span class="antes-cuenta">${cuantas}</span>
+    </div>
+    ${ayuda ? `<p class="antes-donde">
+      <span class="antes-etq">Columna</span> <b>${ayuda.excel}</b> (la número ${ayuda.col})
+      <span class="antes-sep">·</span>
+      <span class="antes-etq">Filas</span> <b>${escapar(muestra)}</b>
+    </p>` : ''}
+    <p class="antes-col">${escapar(g.campo)}</p>
+    ${g.tipo === 'falta' && ayuda?.es
+      ? `<p class="antes-que"><b>Qué falta:</b> ${escapar(ayuda.es)}</p>` : ''}
+    <p class="antes-hacer"><b>Qué hacer:</b> ${escapar(queHacer({
+      tipo: g.tipo, campo: g.campo, valor: g.valor ?? '', sugerido: g.sugerido,
+    }))}</p>
+    ${g.tipo !== 'sobra' ? `<p class="antes-formato"><b>Formato:</b> ${escapar(comoEscribir(g.campo))}</p>` : ''}
+    <p class="antes-porque"><b>Por qué:</b> ${escapar(g.motivo)}</p>
+  </div>`;
+}
+
+function bajarArchivo() {
+  descargar(aCSV(estado.filas), componerNombre(estado.partes));
+}
+
+$('btnCerrarAntes').addEventListener('click', () => $('dlgAntes').close());
+$('btnAntesVolver').addEventListener('click', () => $('dlgAntes').close());
+$('btnAntesDescargar').addEventListener('click', () => {
+  $('dlgAntes').close();
+  bajarArchivo();
+});
+$('btnAntesLista').addEventListener('click', () => $('btnCsvPendientes').click());
+$('dlgAntes').addEventListener('click', e => {
+  if (e.target === $('dlgAntes')) $('dlgAntes').close();
+});
+
 function descargarCorregido() {
   if (!estado || $('btnDescargar').disabled) return;
+  // Con campos sin resolver se muestra el informe antes de bajar el archivo.
+  // No bloquea: el propio informe lleva el boton de descargar.
+  if (estado.pendientes.length) { abrirInformePrevio(); return; }
   // Sin BOM: el validador del sistema lee el archivo tal cual.
-  descargar(aCSV(estado.filas), componerNombre(estado.partes));
+  bajarArchivo();
 }
 
 $('btnDescargar').addEventListener('click', descargarCorregido);
@@ -652,13 +933,26 @@ $('btnCsvCambios').addEventListener('click', () => {
 
 $('btnCsvPendientes').addEventListener('click', () => {
   if (!estado) return;
+  // Esta lista es la que se le pasa a quien captura los datos, asi que lleva
+  // donde esta la celda (columna de Excel y fila) y como se llena.
+  const filas = estado.pendientes.map(p => {
+    const a = AYUDA[p.campo] ?? null;
+    return {
+      ...p,
+      excel: a ? a.excel : '',
+      ncol: a ? a.col : '',
+      como: a ? a.como : '',
+      sugerido: p.sugerido === undefined ? '' : (p.sugerido || '(dejar vacía)'),
+    };
+  });
   descargar(
     conBOM(tablaACSV(
-      ['Fila', 'Campo', 'Nombre del campo', 'Valor actual', 'Que revisar'],
-      estado.pendientes,
-      ['fila', 'campo', 'nombre', 'valor', 'motivo'],
+      ['Fila', 'Columna Excel', 'N de columna', 'Campo', 'Nombre del campo',
+       'Valor actual', 'Que pasa', 'Como se llena', 'Lo que dice el instructivo'],
+      filas,
+      ['fila', 'excel', 'ncol', 'campo', 'nombre', 'valor', 'motivo', 'como', 'sugerido'],
     )),
-    `pendientes_${componerNombre(estado.partes)}`,
+    `campos_por_completar_${componerNombre(estado.partes)}`,
   );
 });
 

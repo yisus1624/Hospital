@@ -288,6 +288,53 @@ console.log('\n== Orden de las fechas con barras ==');
     'Si ninguna fecha lo prueba se mantiene dia/mes y se avisa de la duda');
 }
 
+// ---------------------------------------------------------------------------
+// Un "NO" en una pregunta de SI/NO no obliga a llenar sus campos hijos
+// ---------------------------------------------------------------------------
+
+console.log('\n== Preguntas de SI/NO en negativo ==');
+{
+  const vacia = () => Object.fromEntries(CAMPOS.map(c => [c.col, '']));
+  // urocultivo_post3 admite SI/NO. Con NO el examen no se hizo, asi que no hay
+  // fecha que registrar y el validador de la plataforma no la reclama.
+  const conNo = procesar([{ ...vacia(), urocultivo_post3: 'NO' }]);
+  const pideFecha = conNo.pendientes.some(p => p.campo === 'fecha_urocultivo_post3');
+  comprobar(!pideFecha,
+    'Con la respuesta en NO no se reclama la fecha del examen',
+    'antes se pedian 33 fechas que el sistema acepta vacias');
+
+  // Con SI el examen si se hizo: la fecha pasa a ser obligatoria.
+  const conSi = procesar([{ ...vacia(), urocultivo_post3: 'SI' }]);
+  comprobar(conSi.pendientes.some(p => p.campo === 'fecha_urocultivo_post3'),
+    'Con la respuesta en SI la fecha si se reclama');
+
+  // Y un resultado de laboratorio negativo NO es lo mismo que "no se hizo":
+  // NEGATIVO es un resultado, y su fecha sigue siendo obligatoria.
+  const negativo = procesar([{ ...vacia(), toxoplasma_igm: 'NEGATIVO' }]);
+  comprobar(negativo.pendientes.some(p => p.campo === 'fecha_toxoplasma_igm'),
+    'Un resultado NEGATIVO sigue exigiendo su fecha: es un resultado, no un "no se hizo"');
+}
+
+// ---------------------------------------------------------------------------
+// Fechas que pueden ser anteriores al embarazo
+// ---------------------------------------------------------------------------
+
+console.log('\n== Vacunas puestas antes del embarazo ==');
+{
+  const vacia = () => Object.fromEntries(CAMPOS.map(c => [c.col, '']));
+  const caso = (fechaVacuna) => procesar([{ ...vacia(),
+    fum: '2026-03-08', antitetanica: 'SI', fecha_antitetanica: fechaVacuna }]);
+
+  const antes = caso('2025-07-25');   // 7 meses antes de la FUM
+  comprobar(!antes.pendientes.some(p => p.campo === 'fecha_antitetanica'),
+    'Una antitetanica puesta antes del embarazo no se reporta',
+    'la plataforma la admite hasta 5 años antes de la FUM');
+
+  const muyVieja = caso('2018-01-10'); // mas de 5 años antes
+  comprobar(muyVieja.pendientes.some(p => p.campo === 'fecha_antitetanica'),
+    'Pero mas de 5 años antes si se reporta');
+}
+
 console.log('\n== Estabilidad ==');
 const segunda = procesar(mapearColumnas(leerCSV(csvBase)).filas);
 comprobar(aCSV(segunda.filas) === csvBase,

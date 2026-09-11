@@ -74,11 +74,20 @@ export function leerReporteErrores(texto) {
  * literalmente en el texto del mensaje.
  */
 function camposCitados(mensaje, propio) {
+  // Los mensajes de la plataforma nombran el otro campo de dos maneras:
+  //   - con el nombre exacto de la columna ("fum debe ser menor a la fpp")
+  //   - en palabras ("cuando el tipo de caso este diligenciado entre 1 y 12")
+  // Hay que reconocer las dos. La forma en palabras se busca sobre el texto
+  // normalizado, y solo con nombres largos, porque uno corto apareceria por
+  // casualidad dentro de cualquier frase. La forma exacta se busca como palabra
+  // suelta, y asi entran tambien los nombres cortos que mas se citan: fum, fpp.
   const t = canon(mensaje);
   const citados = [];
   for (const c of CAMPOS) {
     if (canon(c.col) === canon(propio)) continue;
-    if (c.col.length >= 8 && t.includes(canon(c.col))) citados.push(c);
+    const enPalabras = c.col.length >= 8 && t.includes(canon(c.col));
+    const exacto = new RegExp(`(^|[^a-z0-9_])${c.col}([^a-z0-9_]|$)`, 'i').test(mensaje);
+    if (enPalabras || exacto) citados.push(c);
   }
   return citados;
 }

@@ -1007,15 +1007,13 @@ export const CAMPOS = [
   "len": 10,
   "req": "COND",
   "x": {
+   "antes_fum_max_anios": 5,
    "cond": [
     "igual",
     "antitetanica",
     [
      "SI"
     ]
-   ],
-   "mayor_que": [
-    "fum"
    ]
   }
  },
