@@ -18,6 +18,8 @@
 import { CAMPOS, POR_KEY } from './esquema.js';
 import { aFloat } from './normalizar.js';
 import * as fechas from './fechas.js';
+import { CODIGOS as CIE10 } from './cie10.js';
+import { semanaEpidemiologica } from './epidemiologia.js';
 
 export const NA_FECHA = fechas.NA_FECHA;
 
@@ -137,7 +139,12 @@ export function aplicarCentinelas(fila, add, pend) {
     pend('causa_muerte', 'La madre falleció (vitalidad 2): la causa de muerte debe ser 1, 2 o 3');
   }
 
-  for (const [key, cita] of Object.entries(FECHAS_SIN_DATO)) llenar(key, NA_FECHA, cita);
+  for (const [key, cita] of Object.entries(FECHAS_SIN_DATO)) {
+    // Con un metodo anticonceptivo registrado la fecha no es "no aplica": falta.
+    if (key === 'fecha_anticonceptivo' && fila.metodo_anticonceptivo
+        && fila.metodo_anticonceptivo !== '0') continue;
+    llenar(key, NA_FECHA, cita);
+  }
 
   // La fecha de salida solo lleva centinela si hubo aborto.
   if (fila.via_terminacion === 'ABORTO') {
@@ -240,9 +247,22 @@ export function aplicarCruzadas(fila, add, pend) {
         pend('fum',
           `No concuerda con la FPP (${fila.fpp}): entre las dos hay ${d} días, y el embarazo va de 0 a ` +
           '42 semanas. Revisa cuál de las dos fechas está mal en la historia clínica');
+      } else if (Math.abs(fechas.difDias(fila.fpp, naegele)) > TOLERANCIA_FPP) {
+        // Una FPP a 6 semanas de la FUM pasa el rango, pero hace que la
+        // plataforma rechace todos los laboratorios posteriores "por ser
+        // mayores a la FPP". El error de raiz esta aqui.
+        pend('fpp',
+          `La FPP (${fila.fpp}) queda a ${(d / 7).toFixed(1)} semanas de la FUM (${fila.fum}); una ` +
+          `gestación dura unas 40. Por Naegele (FUM + 280 días) sería ${naegele}. Con esta FPP la ` +
+          'plataforma rechaza los laboratorios posteriores a ella. Revisa si el error está en la FPP o en la FUM',
+          'incoherente', naegele);
       }
     }
   }
+
+  corregirFechaCargue(fila, add, pend);
+  revisarSemanaEpidemiologica(fila, add, pend);
+  revisarPostEvento(fila, pend);
 
   // Un resultado de VIH no puede coexistir con el rechazo de la prueba.
   for (const n of [1, 2, 3]) {
@@ -284,12 +304,125 @@ export function aplicarCruzadas(fila, add, pend) {
 }
 
 /**
+ * Diferencia admitida entre la FPP y la de Naegele, en dias. La FPP ajustada
+ * por ecografia se aparta unos dias de FUM + 280; cuatro semanas cubren ese
+ * ajuste sin dejar pasar una FPP que no corresponde a la FUM.
+ */
+const TOLERANCIA_FPP = 28;
+
+/**
+ * Fecha de cargue: se corrige sola.
+ *
+ * El instructivo dice que es "la fecha de cargue del archivo" y que no puede
+ * ser superior a la actual; la plataforma ademas la rechaza si es anterior a la
+ * fecha final del periodo (no se carga un periodo que no ha terminado). El
+ * mismo dia del corte se acepta: no lo rechazo en el reporte de julio.
+ *
+ * No es un dato de la paciente sino del cargue, y el archivo se carga el dia
+ * en que se corrige y descarga, asi que cuando falta o es invalida se pone la
+ * fecha de hoy. De ella dependen todos los controles ("inferior a la fecha de
+ * reporte o cargue"): una fecha de cargue vieja hacia rechazar controles bien
+ * registrados.
+ */
+function corregirFechaCargue(fila, add, pend) {
+  const cargue = fila.fecha_cargue;
+  const corte = fila.fecha_fin_periodo;
+  const hoy = fechas.hoy();
+
+  let motivo = null;
+  if (!cargue) motivo = 'Faltaba la fecha de cargue';
+  else if (cargue > hoy) motivo = `La fecha de cargue (${cargue}) era posterior a hoy`;
+  else if (corte && cargue < corte) {
+    motivo = `La fecha de cargue (${cargue}) era anterior a la fecha final del periodo (${corte})`;
+  }
+  if (!motivo) return;
+
+  if (corte && hoy < corte) {
+    pend('fecha_cargue',
+      `${motivo}. Tampoco sirve la de hoy (${hoy}): el periodo reportado termina el ${corte}, ` +
+      'y no se puede cargar antes de que cierre. Revisa la fecha final del periodo');
+    return;
+  }
+  add('fecha_cargue', hoy,
+    `${motivo}. El instructivo la define como la fecha de cargue del archivo: se pone la de hoy, ` +
+    'que es cuando se descarga para subirlo. Si lo subes otro día, cámbiala por ese día');
+  fila.fecha_cargue = hoy;
+}
+
+/**
+ * Semana epidemiologica.
+ *
+ * Los archivos que la plataforma acepto llevan en todas las filas la semana de
+ * la fecha de corte, que es tambien la del nombre del archivo
+ * (800193912_2026_09_S39: corte 2026-09-30, semana 39). Si falta se llena con
+ * esa; si es otra se señala con esa como sugerencia, porque el instructivo
+ * habla de "la semana en que se realiza la atencion".
+ */
+function revisarSemanaEpidemiologica(fila, add, pend) {
+  const corte = fila.fecha_fin_periodo;
+  if (!corte) return;
+  const calc = semanaEpidemiologica(corte);
+  if (!calc) return;
+  const esperada = String(calc.semana);
+
+  if (!fila.semana_epidemiologica) {
+    add('semana_epidemiologica', esperada,
+      `Faltaba la semana epidemiológica. Es la ${esperada} del calendario del INS, que corresponde ` +
+      `a la fecha de corte (${corte}) y va también en el nombre del archivo`);
+    fila.semana_epidemiologica = esperada;
+  } else if (String(+fila.semana_epidemiologica) !== esperada) {
+    pend('semana_epidemiologica',
+      `La fecha de corte (${corte}) cae en la semana epidemiológica ${esperada} del INS, que es la ` +
+      `que lleva el nombre del archivo, y esta fila dice ${fila.semana_epidemiologica}`,
+      'incoherente', esperada);
+  }
+}
+
+/**
+ * Campos de lo que ocurre al terminar el embarazo.
+ *
+ * El instructivo dice que la vitalidad de la madre y del recien nacido es 1 o
+ * 2 "si llego al momento del parto" y 3 "si aun no ha llegado", y que el metodo
+ * anticonceptivo 0 es "no aplica", que es lo mismo que la fecha 1845-01-01.
+ */
+function revisarPostEvento(fila, pend) {
+  const termino = !!(fila.fecha_terminacion_embarazo || fila.via_terminacion);
+
+  for (const key of ['vitalidad_madre', 'vitalidad_rn']) {
+    const v = fila[key];
+    if (termino && v === '3') {
+      pend(key,
+        `Hay fecha o vía de terminación del embarazo, así que ya llegó el momento del parto, y el 3 ` +
+        'es solo para cuando aún no ha llegado. Registra 1 (vivo/a) o 2 (muerto/a)');
+    } else if (!termino && (v === '1' || v === '2') && key === 'vitalidad_rn') {
+      pend('fecha_terminacion_embarazo',
+        `La vitalidad del recién nacido es ${v}, así que el embarazo terminó, pero falta la fecha ` +
+        'de terminación. Regístrala, o si aún no ha llegado el parto la vitalidad es 3', 'falta');
+    }
+  }
+
+  const metodo = fila.metodo_anticonceptivo;
+  const fecha = fila.fecha_anticonceptivo;
+  if (metodo === '0' && fecha && fecha !== NA_FECHA) {
+    pend('fecha_anticonceptivo',
+      `El método anticonceptivo es 0 (no aplica), y en ese caso la fecha es 1845-01-01; el archivo ` +
+      `trae ${fecha}. Si sí se suministró un método, registra cuál`,
+      'incoherente', NA_FECHA);
+  } else if (metodo && metodo !== '0' && (!fecha || fecha === NA_FECHA)) {
+    pend('fecha_anticonceptivo',
+      `Se registró el método anticonceptivo ${metodo}, así que hace falta la fecha en que se ` +
+      'suministró (la 1845-01-01 es solo para "no aplica")', 'falta');
+  }
+}
+
+/**
  * Contrasta la FUM con la semana gestacional registrada al ingreso.
  *
- * Solo se llama cuando alguna fecha de la fila quedo fuera de orden, porque una
- * FUM equivocada suele ser la causa raiz de esos conflictos. Pequenas
- * discrepancias que el validador acepta no se reportan: darian trabajo sin
- * evitar ningun rechazo.
+ * El instructivo define la semana gestacional como la edad gestacional al
+ * ingresar, que se cuenta desde la FUM: si las dos no cuadran, una esta mal, y
+ * de la FUM dependen la FPP y todas las validaciones de fechas. Se toleran
+ * cuatro semanas, porque la semana suele venir redondeada o ajustada por
+ * ecografia.
  */
 export function verificarFum(fila, pend) {
   const semana = aFloat(fila.semana_gestacional);
@@ -301,9 +434,14 @@ export function verificarFum(fila, pend) {
 
   // Se tolera algo de holgura: la semana gestacional suele venir redondeada
   // y puede corresponder a una fecha de atencion algo distinta a la de ingreso.
-  if (desfase > 3) {
+  if (desfase > 4) {
+    const segunFum = (fechas.difDias(ingreso, fila.fum) / 7).toFixed(1);
     pend('fum',
-      `La FUM (${fila.fum}) no concuerda con la semana gestacional ${semana} registrada al ingreso del ${ingreso}, que corresponderia a una FUM cercana al ${esperada}. Verificar la FUM en la historia clinica: de ella dependen la FPP y las demas fechas`);
+      `La FUM (${fila.fum}) no concuerda con la semana gestacional ${semana} registrada al ingreso ` +
+      `del ${ingreso}: con esa semana la FUM sería cercana al ${esperada}, y con esta FUM la semana ` +
+      `sería ${segunFum}. Revisa en la historia clínica cuál de las dos está mal: de la FUM dependen ` +
+      'la FPP y las demás fechas',
+      'incoherente', esperada);
   }
 }
 
@@ -340,11 +478,17 @@ const BLOQUE_VIH = n => ({
   fecha: `fecha_prueba_vih${n}`,
 });
 
-/** Trimestre gestacional al que corresponde una fecha, contando desde la FUM. */
+/**
+ * Trimestre gestacional al que corresponde una fecha, contando desde la FUM.
+ *
+ * El primer trimestre termina antes de la semana 13. Calibrado con los
+ * reportes de la plataforma: acepto pruebas del trimestre 1 tomadas hasta el
+ * dia 85 y rechazo las de los dias 94, 95 y 100 en adelante.
+ */
 function trimestreDe(fecha, fum) {
   const sem = fechas.difDias(fecha, fum) / 7;
   if (sem < 0) return null;
-  if (sem < 14) return 1;
+  if (sem < 13) return 1;
   if (sem < 28) return 2;
   return 3;
 }
@@ -436,12 +580,40 @@ function revisarControlesDuplicados(fila, pend) {
  */
 export function verificarFechas(fila, pend) {
   const hoy = fechas.hoy();
+  const cargue = fila.fecha_cargue;
+  const fpp = fila.fpp;
   for (const c of CAMPOS) {
     const v = fila[c.key];
     if (c.tipo !== 'F' || !v || v === NA_FECHA) continue;
 
     if (c.x?.no_futura && v > hoy) {
-      pend(c.key, `La fecha ${v} es posterior a hoy (${hoy})`);
+      // Casi siempre es el año mal digitado (2029 por 2026): si con el año del
+      // cargue la fecha queda en su sitio, se sugiere.
+      const anio = (cargue || hoy).slice(0, 4);
+      const otra = `${anio}${v.slice(4)}`;
+      const cabe = otra <= (cargue || hoy) && (!fila.fum || otra > fila.fum);
+      pend(c.key,
+        `La fecha ${v} es posterior a hoy (${hoy})` + (cabe ? `. ¿Es ${otra}? Revisa el año` : ''),
+        'incoherente', cabe ? otra : undefined);
+    }
+
+    // "Inferior a la fecha actual de reporte o cargue": para la plataforma la
+    // fecha actual es la fecha de cargue de la fila, no el dia en que se sube.
+    // Un control del 16 de septiembre en una fila con cargue del 10 se rechaza
+    // aunque se suba en octubre.
+    if (c.x?.hasta_cargue && cargue && v > cargue) {
+      pend(c.key,
+        `Es posterior a la fecha de cargue (${cargue}), y el instructivo la pide inferior a la fecha ` +
+        'de reporte o cargue. Si la fecha de cargue está desactualizada, corrígela a la del día en que ' +
+        'subes el archivo; si no, revisa esta fecha');
+    }
+
+    // "La FPP debe ser superior a la fecha de los laboratorios". La plataforma
+    // acepta un laboratorio el mismo dia de la FPP y rechaza uno posterior.
+    if (c.x?.hasta_fpp && fpp && v > fpp) {
+      pend(c.key,
+        `Es posterior a la FPP (${fpp}), y el instructivo pide los laboratorios antes de la FPP. ` +
+        'Revisa esta fecha o la FPP');
     }
 
     // Hay fechas que pueden ser anteriores a la FUM porque corresponden a algo
@@ -458,18 +630,20 @@ export function verificarFechas(fila, pend) {
       continue;
     }
 
-    const estricto = c.x?.sec === true;
+    // "Superior a la FUM" e "inferior a la FPP" son estrictos: la plataforma
+    // rechaza una atencion fechada el mismo dia de la FUM o de la FPP.
+    const estricto = otro => c.x?.sec === true || otro === 'fum' || otro === 'fpp';
     for (const otro of c.x?.mayor_que || []) {
       const w = fila[otro];
       if (!w || w === NA_FECHA) continue;
-      if (estricto ? v <= w : v < w) {
+      if (estricto(otro) ? v <= w : v < w) {
         pend(c.key, `Debe ser posterior a ${POR_KEY[otro].nombre} (${w}) y vale ${v}`);
       }
     }
     for (const otro of c.x?.menor_que || []) {
       const w = fila[otro];
       if (!w || w === NA_FECHA) continue;
-      if (estricto ? v >= w : v > w) {
+      if (estricto(otro) ? v >= w : v > w) {
         pend(c.key, `Debe ser anterior a ${POR_KEY[otro].nombre} (${w}) y vale ${v}`);
       }
     }
@@ -521,5 +695,30 @@ export function verificarObligatorios(fila, pend) {
     pend(c.key, c.req === 'COND'
       ? `Obligatorio porque ${POR_KEY[c.x.cond[1]].nombre} es "${fila[c.x.cond[1]] || 'vacio'}"`
       : 'Campo obligatorio sin dato', 'falta');
+  }
+}
+
+/**
+ * Codigos de diagnostico CIE-10.
+ *
+ * El formato es una letra, dos digitos y un cuarto caracter: el digito de la
+ * subcategoria, o X en las categorias que no se subdividen (N96X). Si la tabla
+ * de SISPRO esta cargada (ver `cie10.js`) se comprueba ademas que el codigo
+ * exista: N772 tiene buen formato, pero la categoria N77 solo tiene N770, N771
+ * y N778, y la plataforma lo rechaza.
+ */
+export function verificarCie10(fila, pend) {
+  for (const c of CAMPOS) {
+    const v = fila[c.key];
+    if (!c.x?.cie10 || !v) continue;
+    if (!/^[A-Z]\d{2}[0-9X]?$/.test(v)) {
+      pend(c.key,
+        `"${v}" no tiene la forma de un código CIE-10: una letra, dos dígitos y el dígito de la ` +
+        'subcategoría (O200), o X si la categoría no se subdivide (N96X)');
+    } else if (CIE10 && !CIE10.has(v)) {
+      pend(c.key,
+        `El código ${v} no existe en la tabla CIE-10 de SISPRO, y la plataforma lo rechaza ` +
+        '("no coincide con los códigos EDIA_DIAGNOSTICO"). Revisa el diagnóstico en la historia clínica');
+    }
   }
 }

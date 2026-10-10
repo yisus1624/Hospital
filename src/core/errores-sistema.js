@@ -103,11 +103,18 @@ function camposCitados(mensaje, propio) {
  *   - `dependiente` la celda esta limpia, pero el mensaje habla de otro campo
  *                   que si quedo pendiente en esa misma fila. No se puede dar
  *                   por resuelto hasta que se decida ese otro campo.
- *   - `corregido`   ni la celda ni los campos que cita el mensaje tienen nada
- *                   pendiente. Lo mas probable es que ya este resuelto, pero
- *                   solo la plataforma decide.
+ *   - `sin_cambio`  el corrector no ve nada en la celda, pero la celda sigue
+ *                   con el mismo valor que la plataforma rechazo. No esta
+ *                   resuelto: hay una regla de la plataforma que el corrector
+ *                   no conoce (un codigo CIE-10 que no existe, por ejemplo).
+ *   - `corregido`   la celda cambio y ni ella ni los campos que cita el
+ *                   mensaje tienen nada pendiente. Lo mas probable es que ya
+ *                   este resuelto, pero solo la plataforma decide.
+ *
+ * `brutas` son los registros tal como venian en el archivo original. Sin
+ * ellos no se puede saber si la celda cambio, y se asume que si.
  */
-export function cruzar(errores, filas, pendientes) {
+export function cruzar(errores, filas, pendientes, brutas) {
   const pendientePorCelda = new Set(
     pendientes.map(p => `${p.fila}|${canon(p.campo)}`));
 
@@ -128,6 +135,17 @@ export function cruzar(errores, filas, pendientes) {
           .filter(c => pendientePorCelda.has(`${e.fila}|${canon(c.col)}`))
       : [];
 
+    // Se compara con el valor original para no dar por resuelto un error
+    // sobre una celda que sale del corrector exactamente igual que entro.
+    // Tampoco si cambio un campo del que depende el error: un control "mayor a
+    // la fecha de cargue" se resuelve corrigiendo la fecha de cargue. Para la
+    // plataforma "la fecha actual" es la fecha de cargue de la fila.
+    const bruta = brutas && e.fila ? brutas[e.fila - 2] : null;
+    const sinCambiar = c => limpiar(bruta?.[c.col] ?? '') === String(registro?.[c.key] ?? '');
+    const relacionados = camposCitados(e.mensaje, e.campoBruto);
+    if (/fecha actual|cargue|reporte/i.test(e.mensaje)) relacionados.push(POR_KEY.fecha_cargue);
+    const igual = !!bruta && !!e.campo && sinCambiar(e.campo) && relacionados.every(sinCambiar);
+
     return {
       ...e,
       valorActual: valor,
@@ -135,7 +153,9 @@ export function cruzar(errores, filas, pendientes) {
       depende: depende.map(c => c.nombre),
       estado: sigue ? 'pendiente'
         : depende.length ? 'dependiente'
-        : (e.campo || esNombreArchivo) ? 'corregido'
+        : esNombreArchivo ? 'corregido'
+        : e.campo && igual ? 'sin_cambio'
+        : e.campo ? 'corregido'
         : 'desconocido',
     };
   });
@@ -174,6 +194,7 @@ export function resumirCruce(cruzados) {
     corregidos: cuenta('corregido'),
     pendientes: cuenta('pendiente'),
     dependientes: cuenta('dependiente'),
+    sinCambio: cuenta('sin_cambio'),
     desconocidos: cuenta('desconocido'),
     campos: new Set(cruzados.map(c => c.campoBruto).filter(Boolean)).size,
     filas: new Set(cruzados.map(c => c.fila).filter(Boolean)).size,
@@ -195,6 +216,7 @@ export function agruparPorMensaje(cruzados) {
         filas: [],
         pendientes: 0,
         dependientes: 0,
+        sinCambio: 0,
         depende: [],
       });
     }
@@ -202,6 +224,7 @@ export function agruparPorMensaje(cruzados) {
     g.veces++;
     if (c.fila) g.filas.push(c.fila);
     if (c.estado === 'pendiente') g.pendientes++;
+    if (c.estado === 'sin_cambio') g.sinCambio++;
     if (c.estado === 'dependiente') {
       g.dependientes++;
       for (const n of c.depende) if (!g.depende.includes(n)) g.depende.push(n);

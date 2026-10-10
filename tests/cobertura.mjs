@@ -335,6 +335,76 @@ console.log('\n== Vacunas puestas antes del embarazo ==');
     'Pero mas de 5 años antes si se reporta');
 }
 
+// ---------------------------------------------------------------------------
+// Reglas calibradas con los reportes de errores de la plataforma
+// ---------------------------------------------------------------------------
+
+console.log('\n== Reglas de fechas de la plataforma ==');
+{
+  const vacia = () => Object.fromEntries(CAMPOS.map(c => [c.col, '']));
+  const base = {
+    fecha_de_cargue: '2026-10-01',
+    fecha_inicial_del_periodo_de_la_informacion_reportada: '2026-07-01',
+    fecha_final_del_periodo_de_la_informacion_reportada: '2026-09-30',
+    fum: '2026-07-01', fpp: '2027-04-07',
+  };
+  const caso = extra => procesar([{ ...vacia(), ...base, ...extra }]);
+  const marca = (r, col) => r.pendientes.find(p => p.campo === col);
+
+  const igualFum = caso({ fecha_hepatitis_b: '2026-07-01', hepatitis_b: 'NEGATIVO' });
+  comprobar(!!marca(igualFum, 'fecha_hepatitis_b'),
+    'Una fecha igual a la FUM se reporta: "superior a la FUM" es estricto');
+
+  const trasCargue = caso({ control_nutricion1: '2026-10-05' });
+  comprobar(!!marca(trasCargue, 'control_nutricion1'),
+    'Un control posterior a la fecha de cargue se reporta');
+
+  const trasFpp = caso({ fpp: '2026-09-01', hb: '11', fecha_hb: '2026-09-10' });
+  comprobar(!!marca(trasFpp, 'fecha_hb'), 'Un laboratorio posterior a la FPP se reporta');
+  comprobar(marca(trasFpp, 'fpp')?.sugerido === '2027-04-07',
+    'Una FPP que no corresponde a la FUM se reporta con la de Naegele');
+
+  const vieja = caso({ fecha_de_cargue: '2026-09-10', control_nutricion1: '2026-09-20' });
+  comprobar(vieja.filas[0].fecha_cargue > '2026-09-30',
+    'Una fecha de cargue anterior al corte se corrige sola');
+  comprobar(!marca(vieja, 'control_nutricion1'),
+    'Y con eso deja de reportarse el control que la superaba');
+
+  const anio = caso({ ecografia3_obstetrica: 'SI', fecha_ecografia3: '2029-09-12' });
+  comprobar(marca(anio, 'fecha_ecografia3')?.sugerido === '2026-09-12',
+    'Una fecha futura por el año mal digitado se reporta con el año sugerido');
+
+  const vih = caso({ resultado_prueba_rapida_trimestre_1: 'NEGATIVO',
+    fecha_de_realizacion_de_la_prueba_vih_1: '2026-10-01' }); // dia 92
+  comprobar(!!marca(vih, 'fecha_de_realizacion_de_la_prueba_vih_1'),
+    'La prueba de VIH 1 de la semana 13 se reporta fuera del primer trimestre');
+
+  const uro = caso({ urocultivo1: 'POSITIVO', fecha_urocultivo1: '2026-08-01' });
+  comprobar(marca(uro, 'urocultivo_post1')?.tipo === 'falta',
+    'Con Urocultivo1 POSITIVO se pide Urocultivo_post1');
+
+  const semana = caso({});
+  comprobar(semana.filas[0].semana_epidemiologica === '39',
+    'La semana epidemiologica vacia se llena con la de la fecha de corte');
+
+  const metodo = caso({ metodo_de_planificacion_familiar_post_evento_obstetrico: '5' });
+  comprobar(marca(metodo, 'fecha_suministro_metodo_planificacion_familiar_post_evento_obstetrico')?.tipo === 'falta',
+    'Con un metodo anticonceptivo registrado se pide su fecha, no se pone 1845-01-01');
+
+  const rn = caso({ vitalidad_del_recien_nacido: '1' });
+  comprobar(!!marca(rn, 'fecha_de_terminacion_del_embarazo'),
+    'Con recien nacido vivo se pide la fecha de terminacion del embarazo');
+
+  const periodo = procesar([
+    { ...vacia(), ...base },
+    { ...vacia(), ...base },
+    { ...vacia(), ...base, fecha_final_del_periodo_de_la_informacion_reportada: '2026-08-31' },
+  ]);
+  comprobar(periodo.pendientes.some(p => p.fila === 4
+      && p.campo === 'fecha_final_del_periodo_de_la_informacion_reportada' && p.sugerido === '2026-09-30'),
+    'Una fila con otro periodo se reporta con el del resto del archivo');
+}
+
 console.log('\n== Estabilidad ==');
 const segunda = procesar(mapearColumnas(leerCSV(csvBase)).filas);
 comprobar(aCSV(segunda.filas) === csvBase,

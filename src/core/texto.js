@@ -4,8 +4,8 @@
  * Quita tildes y diacriticos, conservando la enye.
  *
  * El instructivo pide los nombres "sin tildes", y la enye no lo es: es una letra
- * del alfabeto español. Convertirla en N cambiaria el apellido de la paciente
- * (CAÑAS pasaria a leerse CANAS), asi que se respeta.
+ * del alfabeto español. Aqui se conserva; si se reemplaza por N lo decide
+ * `enyeComoN` en normalizar.js, porque la plataforma la rechaza.
  */
 export function sinTildes(s) {
   return String(s ?? '')

@@ -53,13 +53,13 @@ Tras pasarlo por el corrector (`npm test` reproduce estas cifras):
 
 | | |
 |---|---|
-| Correcciones aplicadas | 414 |
-| Campos que necesitan que los completes tú | 76, en 18 filas |
-| Errores del reporte que quedan resueltos | 650 |
+| Correcciones aplicadas | 415 |
+| Campos que necesitan que los completes tú | 78, en 18 filas |
+| Errores del reporte que quedan resueltos | 644 |
 | Errores que siguen abiertos | 88 |
-| Errores que dependen de un campo por decidir | 171 |
+| Errores que dependen de un campo por decidir | 177 |
 
-Los 171 «dependientes» no están resueltos ni abiertos: son errores sobre campos
+Los 177 «dependientes» no están resueltos ni abiertos: son errores sobre campos
 cuya causa es otro campo que todavía está pendiente. El caso típico son los
 nueve campos de seguimiento, que solo hay que diligenciar si el **tipo de caso**
 va entre 1 y 12, y el tipo de caso es justamente uno de los datos que tienes que
@@ -151,12 +151,14 @@ mismo registro:
 | Formato de fecha | `15/03/2026`, `20260315`, serial de Excel → `2026-03-15` |
 | Valores de catálogo | `Positivo`, `pos`, `+` → `POSITIVO` |
 | Vocabulario equivocado | `ALTO`/`BAJO` donde el sistema pide `SI`/`NO` o los códigos `4`/`5` |
-| Tildes | `PÉREZ` → `PEREZ`. **La ñ se conserva**: `CAÑAS` sigue siendo `CAÑAS`, porque `CANAS` es otro apellido |
+| Tildes y ñ | `PÉREZ` → `PEREZ`, `NUÑEZ` → `NUNEZ`. La plataforma rechaza la ñ («debe contener solo letras») en todos los reportes recibidos, así que se reemplaza por N; nunca se borra (`CAAS` sería otro apellido) |
 | Campos que no aplican | Si `ecografia3` es `NO`, sus campos hijos se vacían |
 | Centinelas obligatorios | Chagas sin tamizaje → fecha `1845-01-01` |
 | Códigos de "no aplica" | Sin sífilis confirmada → tratamiento `4`, pareja `3` |
 | Causa de muerte | Si la madre no falleció → `4` |
 | Nombre del archivo | `NIT_AÑO_MES_Snn` con NIT de 9 dígitos |
+| Fecha de cargue | Si falta, es futura o es anterior al corte del periodo, se pone la fecha de hoy: es la del día en que se descarga para subir. Es un dato del cargue, no de la paciente, y de ella dependen todos los controles |
+| Semana epidemiológica vacía | La de la fecha de corte según el calendario del INS, la misma del nombre del archivo |
 | Resultado de sífilis | `POSITIVO` pasa a `REACTIVO` si el estudio declarado es VDRL: es el mismo resultado con la palabra que usa el instructivo |
 
 ### Cuando un valor no se puede interpretar
@@ -198,6 +200,11 @@ pero no se aplican solos:
 | Tipo de caso vacío | El código `21`, que es «no tiene tipo de caso» |
 | Prueba de VIH en el trimestre equivocado | A qué trimestre habría que pasar las cinco columnas |
 | Dos controles del mismo profesional con idéntica fecha | Dejar vacío el duplicado |
+| Fecha en el futuro (ecografía en 2029) | La misma fecha con el año del cargue, si así queda en su sitio |
+| FUM que no cuadra con la semana gestacional del ingreso | La FUM que corresponde a esa semana |
+| FPP a más de 4 semanas de FUM + 280 días | La FPP de Naegele |
+| Fila con otro periodo reportado | El periodo que trae el resto del archivo |
+| Semana epidemiológica distinta a la del corte | La semana de la fecha de corte |
 
 La diferencia importa: son datos de una paciente, y quien decide es quien tiene
 la historia clínica delante. En la tabla de campos por completar la sugerencia
@@ -266,14 +273,15 @@ El reporte por sí solo no alcanza: solo trae fila, campo y mensaje, no los dato
 de la gestante. Por eso siempre hacen falta los dos archivos; lo que no importa
 es el orden en que los entregues.
 
-El cruce agrupa los errores por tipo y marca cada grupo con uno de tres estados,
-junto al número de fila donde aparece:
+El cruce agrupa los errores por tipo y marca cada grupo con uno de cuatro
+estados, junto al número de fila donde aparece:
 
 | Estado | Qué significa |
 |---|---|
 | **Sigue abierto** | El corrector también señala esa celda: hay que resolverla |
 | **Depende de otro campo** | La celda está limpia, pero el mensaje habla de otro campo de esa misma fila que sigue pendiente. No se puede dar por resuelto hasta decidir ese otro campo |
-| **Ya resuelto** | Ni la celda ni los campos que cita el mensaje tienen nada pendiente |
+| **Sigue igual** | El corrector no encuentra la falla, pero la celda tiene el mismo valor que la plataforma rechazó, así que la volverá a rechazar. Es una regla que SIRA no conoce: revísala con el mensaje de la plataforma |
+| **Ya resuelto** | La celda cambió, y ni ella ni los campos que cita el mensaje tienen nada pendiente |
 
 **Importante: el cruce no verifica el archivo contra las reglas de la
 plataforma**, porque esas reglas no están publicadas. Lo que hace es contrastar
@@ -281,13 +289,11 @@ cada error con lo que el corrector ve hoy en esa celda. «Ya resuelto» signific
 «el corrector no encuentra nada que objetar aquí», no «la plataforma lo va a
 aceptar». La palabra final la tiene el sistema de salud.
 
-Si en ese reporte aparece un error de tipo «debe contener solo letras» sobre una
-celda que hoy lleva ñ, es la prueba de que la plataforma no la acepta: SIRA lo
-avisa y ofrece un botón para reemplazar la ñ por N en todo el archivo y volver a
-descargarlo. Hasta que el sistema no lo demuestre, la ñ se respeta.
+La ñ se reemplaza por N desde el principio: la plataforma la rechazó con «debe
+contener solo letras» en cada reporte recibido (CAÑAS, SEÑA, NUÑEZ).
 
 Sobre el caso real: de los 909 errores que devolvió la plataforma, el cruce
-muestra 650 resueltos, 88 abiertos y 171 a la espera de otro campo, cada uno con
+muestra 644 resueltos, 88 abiertos y 177 a la espera de otro campo, cada uno con
 el mensaje textual del sistema.
 
 Vale la pena ver por qué se resuelven tantos de golpe. La mayoría de los errores
@@ -367,10 +373,46 @@ El separador se detecta solo: funciona con archivos separados por comas, por
 punto y coma (lo que produce Excel en configuración regional española) o por
 tabuladores, con o sin BOM y con cualquier tipo de salto de línea.
 
+### Reglas de fechas que aplica la plataforma
+
+Calibradas con los reportes de errores reales. Todas salen del instructivo; lo
+que añaden los reportes es cómo las interpreta el sistema:
+
+- **«Superior a la FUM» es estricto.** Una atención fechada el mismo día de la
+  FUM se rechaza.
+- **«Inferior a la fecha actual de reporte o cargue»** (controles, cursos de
+  paternidad, ingreso al programa) se compara con la **fecha de cargue de la
+  fila**, no con el día en que se sube el archivo.
+- **La fecha de cargue no puede ser anterior a la fecha final del periodo.** El
+  mismo día del corte se acepta. SIRA sugiere la fecha de hoy.
+- **Laboratorios y ecografías no pueden ser posteriores a la FPP**, y los
+  cursos de paternidad y el ingreso RIAMP tienen que ser anteriores a ella. Una
+  FPP que se aparta más de 4 semanas de FUM + 280 días se señala, porque es la
+  causa de esos rechazos.
+- **Ninguna fecha de un hecho ocurrido puede ser futura** (por ejemplo, una
+  ecografía en 2029).
+- **Primer trimestre = antes de la semana 13.** La plataforma aceptó pruebas de
+  VIH 1 hasta el día 85 y rechazó desde el día 94.
+
+### Diagnósticos CIE-10
+
+El instructivo pide los diagnósticos según la tabla CIE-10 de SISPRO, y la
+plataforma los rechaza si no están en ella («no coincide con los códigos
+EDIA_DIAGNOSTICO»): `N772` tiene buen formato, pero la categoría N77 solo tiene
+N770, N771 y N778. SIRA siempre comprueba el formato; para comprobar que el
+código exista hay que cargar la tabla una vez:
+
+1. Descarga la tabla CIE10 de web.sispro.gov.co (Tablas de referencia) y
+   guárdala como CSV.
+2. Ejecuta `node tools/generar-cie10.mjs ruta/al/archivo.csv`.
+
+Eso escribe `src/core/cie10.js` con todos los códigos. Mientras no se haga, un
+código inexistente aparece en el cruce con el reporte como **Sigue igual**.
+
 ### Discrepancias del instructivo
 
 `npm run test:instructivo` contrasta los 248 campos contra la tabla del PDF y
-las imprime una a una. Son siete, de dos clases distintas.
+las imprime una a una. Son diez, de dos clases distintas.
 
 **El validador real contradice al documento** (manda el validador: el archivo
 tiene que pasar por él, no por el PDF):
@@ -381,6 +423,13 @@ tiene que pasar por él, no por el PDF):
 - **Causa de muerte.** El instructivo la hace condicional a que la madre haya
   fallecido, pero el código `4` («la persona no ha fallecido») tiene que ir
   siempre. Se trata como obligatoria y el corrector rellena el `4`.
+- **Urocultivo_post1.** El instructivo lo deja opcional, pero la plataforma lo
+  exige cuando Urocultivo1 es `POSITIVO` o `INDETECTABLE`, igual que
+  Urocultivo_post2.
+- **Fecha asesoría IVE.** El instructivo no la compara con la FUM, pero la
+  plataforma la rechaza si no es posterior.
+- **Antitetánica anterior a la FUM.** Se admite hasta 5 años antes, como acepta
+  la plataforma.
 - **Longitud de los tipos de estudio de sífilis** (campos 111 y 127). Declara
   longitud 1, pero sus propios valores permitidos son `PRUEBA RAPIDA` y `VDRL`.
 

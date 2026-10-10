@@ -69,6 +69,13 @@ const DESVIACIONES = {
     motivo: 'El instructivo pide que la fecha de la antitetanica sea posterior a la FUM, pero la vacuna ' +
             'suele ponerse antes del embarazo. El reporte de la plataforma lo dice: "fecha_antitetanica si ' +
             'es menor a la fum no puede ser superior a 5 años". Se admite anterior, hasta 5 años.' },
+  104: { clase: 'validador', campo: 'requerido',
+    motivo: 'El instructivo lo deja opcional, pero la plataforma aplica la misma regla que a ' +
+            'Urocultivo_post2: "debe ser diligenciado ... cuando el campo urocultivo1 este diligenciado ' +
+            'con POSITIVO o INDETECTABLE". Se trata como condicional a Urocultivo1.' },
+  154: { clase: 'validador', campo: 'fecha',
+    motivo: 'La nota del instructivo no la compara con la FUM, pero la plataforma la rechaza con ' +
+            '"fecha_asesoria_ive no puede ser menor a FUM". Se exige posterior a la FUM.' },
   111: { clase: 'validador', campo: 'longitud',
     motivo: 'Longitud declarada 1, pero los propios valores permitidos son PRUEBA RAPIDA y VDRL. Manda el catalogo.' },
   127: { clase: 'validador', campo: 'longitud',
@@ -210,8 +217,8 @@ for (const [num, d] of Object.entries(DESVIACIONES)) {
   console.log(dim(`        ${num} ${c.nombre} · ${d.clase} · ${d.campo}`));
   console.log(dim(`           ${d.motivo}`));
 }
-comprobar(Object.keys(DESVIACIONES).length === 8,
-  'Las desviaciones respecto al documento son las 8 declaradas, ni una mas');
+comprobar(Object.keys(DESVIACIONES).length === 10,
+  'Las desviaciones respecto al documento son las 10 declaradas, ni una mas');
 
 // ---------------------------------------------------------------------------
 

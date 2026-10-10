@@ -262,7 +262,9 @@ export const CAMPOS = [
    "mayor_que": [
     "fum",
     "fecha_ingreso_riamp"
-   ]
+   ],
+   "hasta_cargue": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -340,7 +342,8 @@ export const CAMPOS = [
    "menor_que": [
     "fpp",
     "fecha_ingreso_programa"
-   ]
+   ],
+   "no_futura": true
   }
  },
  {
@@ -392,7 +395,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -423,7 +428,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -450,7 +457,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -481,7 +490,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -512,7 +523,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -543,7 +556,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -574,7 +589,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -605,7 +622,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -636,7 +655,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -667,7 +688,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -698,7 +721,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -729,7 +754,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -760,7 +787,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -791,7 +820,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -821,7 +852,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -852,7 +885,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -883,7 +918,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -914,7 +951,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -948,7 +987,8 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true
   }
  },
  {
@@ -982,7 +1022,8 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true
   }
  },
  {
@@ -1014,7 +1055,8 @@ export const CAMPOS = [
     [
      "SI"
     ]
-   ]
+   ],
+   "no_futura": true
   }
  },
  {
@@ -1032,7 +1074,8 @@ export const CAMPOS = [
    "menor_que": [
     "fpp"
    ],
-   "no_futura": true
+   "no_futura": true,
+   "hasta_cargue": true
   }
  },
  {
@@ -1052,7 +1095,8 @@ export const CAMPOS = [
     "fpp"
    ],
    "no_futura": true,
-   "sec": true
+   "sec": true,
+   "hasta_cargue": true
   }
  },
  {
@@ -1073,7 +1117,8 @@ export const CAMPOS = [
     "fpp"
    ],
    "no_futura": true,
-   "sec": true
+   "sec": true,
+   "hasta_cargue": true
   }
  },
  {
@@ -1095,7 +1140,8 @@ export const CAMPOS = [
     "fpp"
    ],
    "no_futura": true,
-   "sec": true
+   "sec": true,
+   "hasta_cargue": true
   }
  },
  {
@@ -1118,7 +1164,8 @@ export const CAMPOS = [
     "fpp"
    ],
    "no_futura": true,
-   "sec": true
+   "sec": true,
+   "hasta_cargue": true
   }
  },
  {
@@ -1142,7 +1189,8 @@ export const CAMPOS = [
     "fpp"
    ],
    "no_futura": true,
-   "sec": true
+   "sec": true,
+   "hasta_cargue": true
   }
  },
  {
@@ -1167,7 +1215,8 @@ export const CAMPOS = [
     "fpp"
    ],
    "no_futura": true,
-   "sec": true
+   "sec": true,
+   "hasta_cargue": true
   }
  },
  {
@@ -1212,7 +1261,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -1245,7 +1296,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -1275,7 +1328,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -1306,7 +1361,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -1340,7 +1397,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -1374,7 +1433,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -1404,7 +1465,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -1457,7 +1520,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -1489,7 +1554,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -1523,7 +1590,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -1576,12 +1645,22 @@ export const CAMPOS = [
   "nombre": "Urocultivo_post1",
   "tipo": "T",
   "len": 2,
-  "req": "NO",
+  "req": "COND",
   "vals": [
    "POSITIVO",
    "NEGATIVO",
    "INDETECTABLE"
-  ]
+  ],
+  "x": {
+   "cond": [
+    "igual",
+    "urocultivo1",
+    [
+     "POSITIVO",
+     "INDETECTABLE"
+    ]
+   ]
+  }
  },
  {
   "num": 105,
@@ -1598,7 +1677,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -1612,7 +1693,9 @@ export const CAMPOS = [
   "x": {
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -1640,7 +1723,9 @@ export const CAMPOS = [
    "mayor_que": [
     "fum",
     "fecha_asesoria_pre_vih1"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -1671,7 +1756,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -1724,7 +1811,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -1756,7 +1845,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -1790,7 +1881,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -1875,7 +1968,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -1889,7 +1984,9 @@ export const CAMPOS = [
   "x": {
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -1916,7 +2013,9 @@ export const CAMPOS = [
   "x": {
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -1947,7 +2046,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -2000,7 +2101,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -2035,7 +2138,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -2069,7 +2174,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -2143,7 +2250,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -2157,7 +2266,9 @@ export const CAMPOS = [
   "x": {
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -2184,7 +2295,9 @@ export const CAMPOS = [
   "x": {
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -2215,7 +2328,9 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true,
+   "hasta_fpp": true
   }
  },
  {
@@ -2320,7 +2435,8 @@ export const CAMPOS = [
   "x": {
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true
   }
  },
  {
@@ -2367,7 +2483,8 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true
   }
  },
  {
@@ -2377,7 +2494,13 @@ export const CAMPOS = [
   "nombre": "Fecha asesoria IVE",
   "tipo": "F",
   "len": 10,
-  "req": "NO"
+  "req": "NO",
+  "x": {
+   "no_futura": true,
+   "mayor_que": [
+    "fum"
+   ]
+  }
  },
  {
   "num": 155,
@@ -2438,7 +2561,8 @@ export const CAMPOS = [
   "x": {
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true
   }
  },
  {
@@ -2472,7 +2596,8 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true
   }
  },
  {
@@ -2508,7 +2633,8 @@ export const CAMPOS = [
     [
      "NO SE REALIZA TAMIZAJE"
     ]
-   ]
+   ],
+   "no_futura": true
   }
  },
  {
@@ -2529,7 +2655,8 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true
   }
  },
  {
@@ -2641,7 +2768,8 @@ export const CAMPOS = [
    "mayor_que": [
     "fum"
    ],
-   "na": "1845-01-01"
+   "na": "1845-01-01",
+   "no_futura": true
   }
  },
  {
@@ -2719,7 +2847,8 @@ export const CAMPOS = [
   "len": 10,
   "req": "SI",
   "x": {
-   "na": "1845-01-01"
+   "na": "1845-01-01",
+   "no_futura": true
   }
  },
  {
@@ -2738,7 +2867,8 @@ export const CAMPOS = [
      "1",
      "2"
     ]
-   ]
+   ],
+   "no_futura": true
   }
  },
  {
@@ -2757,7 +2887,8 @@ export const CAMPOS = [
      "1",
      "2"
     ]
-   ]
+   ],
+   "no_futura": true
   }
  },
  {
@@ -2778,7 +2909,8 @@ export const CAMPOS = [
    ],
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true
   }
  },
  {
@@ -2809,7 +2941,8 @@ export const CAMPOS = [
    "mayor_que": [
     "fum"
    ],
-   "no_futura": true
+   "no_futura": true,
+   "hasta_cargue": true
   }
  },
  {
@@ -2822,9 +2955,11 @@ export const CAMPOS = [
   "req": "NO",
   "x": {
    "mayor_que": [
-    "fum"
+    "fum",
+    "consulta_1v_ginecologo"
    ],
-   "no_futura": true
+   "no_futura": true,
+   "hasta_cargue": true
   }
  },
  {
@@ -2861,7 +2996,8 @@ export const CAMPOS = [
     "control_gineco1"
    ],
    "no_futura": true,
-   "sec": true
+   "sec": true,
+   "hasta_cargue": true
   }
  },
  {
@@ -2899,7 +3035,8 @@ export const CAMPOS = [
     "control_gineco2"
    ],
    "no_futura": true,
-   "sec": true
+   "sec": true,
+   "hasta_cargue": true
   }
  },
  {
@@ -2938,7 +3075,8 @@ export const CAMPOS = [
     "control_gineco3"
    ],
    "no_futura": true,
-   "sec": true
+   "sec": true,
+   "hasta_cargue": true
   }
  },
  {
@@ -2978,7 +3116,8 @@ export const CAMPOS = [
     "control_gineco4"
    ],
    "no_futura": true,
-   "sec": true
+   "sec": true,
+   "hasta_cargue": true
   }
  },
  {
@@ -3019,7 +3158,8 @@ export const CAMPOS = [
     "control_gineco5"
    ],
    "no_futura": true,
-   "sec": true
+   "sec": true,
+   "hasta_cargue": true
   }
  },
  {
@@ -3061,7 +3201,8 @@ export const CAMPOS = [
     "control_gineco6"
    ],
    "no_futura": true,
-   "sec": true
+   "sec": true,
+   "hasta_cargue": true
   }
  },
  {
@@ -3096,7 +3237,8 @@ export const CAMPOS = [
    "mayor_que": [
     "fum"
    ],
-   "no_futura": true
+   "no_futura": true,
+   "hasta_cargue": true
   }
  },
  {
@@ -3133,7 +3275,8 @@ export const CAMPOS = [
     "primera_vez_med_general"
    ],
    "no_futura": true,
-   "sec": true
+   "sec": true,
+   "hasta_cargue": true
   }
  },
  {
@@ -3168,7 +3311,8 @@ export const CAMPOS = [
    "mayor_que": [
     "fum"
    ],
-   "no_futura": true
+   "no_futura": true,
+   "hasta_cargue": true
   }
  },
  {
@@ -3224,7 +3368,8 @@ export const CAMPOS = [
     "control_nutricion1"
    ],
    "no_futura": true,
-   "sec": true
+   "sec": true,
+   "hasta_cargue": true
   }
  },
  {
@@ -3278,7 +3423,8 @@ export const CAMPOS = [
    "mayor_que": [
     "fum"
    ],
-   "no_futura": true
+   "no_futura": true,
+   "hasta_cargue": true
   }
  },
  {
@@ -3315,7 +3461,8 @@ export const CAMPOS = [
     "control_psicologia1"
    ],
    "no_futura": true,
-   "sec": true
+   "sec": true,
+   "hasta_cargue": true
   }
  },
  {
@@ -3350,7 +3497,8 @@ export const CAMPOS = [
    "mayor_que": [
     "fum"
    ],
-   "no_futura": true
+   "no_futura": true,
+   "hasta_cargue": true
   }
  },
  {
@@ -3387,7 +3535,8 @@ export const CAMPOS = [
     "control_perinatologo1"
    ],
    "no_futura": true,
-   "sec": true
+   "sec": true,
+   "hasta_cargue": true
   }
  },
  {
@@ -3422,7 +3571,8 @@ export const CAMPOS = [
    "mayor_que": [
     "fum"
    ],
-   "no_futura": true
+   "no_futura": true,
+   "hasta_cargue": true
   }
  },
  {
@@ -3439,7 +3589,8 @@ export const CAMPOS = [
     "control_enfermeria1"
    ],
    "no_futura": true,
-   "sec": true
+   "sec": true,
+   "hasta_cargue": true
   }
  },
  {
@@ -3457,7 +3608,8 @@ export const CAMPOS = [
     "control_enfermeria2"
    ],
    "no_futura": true,
-   "sec": true
+   "sec": true,
+   "hasta_cargue": true
   }
  },
  {
@@ -3472,7 +3624,8 @@ export const CAMPOS = [
    "mayor_que": [
     "fum"
    ],
-   "no_futura": true
+   "no_futura": true,
+   "hasta_cargue": true
   }
  },
  {
@@ -3578,7 +3731,8 @@ export const CAMPOS = [
   "x": {
    "mayor_que": [
     "fum"
-   ]
+   ],
+   "no_futura": true
   }
  },
  {
@@ -3607,7 +3761,8 @@ export const CAMPOS = [
    "mayor_que": [
     "fum"
    ],
-   "na": "1845-01-01"
+   "na": "1845-01-01",
+   "no_futura": true
   }
  },
  {
@@ -3622,7 +3777,8 @@ export const CAMPOS = [
    "mayor_que": [
     "fum"
    ],
-   "na": "1845-01-01"
+   "na": "1845-01-01",
+   "no_futura": true
   }
  },
  {
@@ -3637,7 +3793,8 @@ export const CAMPOS = [
    "mayor_que": [
     "fum"
    ],
-   "na": "1845-01-01"
+   "na": "1845-01-01",
+   "no_futura": true
   }
  },
  {
@@ -3652,7 +3809,8 @@ export const CAMPOS = [
    "mayor_que": [
     "fum"
    ],
-   "na": "1845-01-01"
+   "na": "1845-01-01",
+   "no_futura": true
   }
  },
  {
@@ -3722,7 +3880,8 @@ export const CAMPOS = [
    "mayor_que": [
     "fum"
    ],
-   "na": "1845-01-01"
+   "na": "1845-01-01",
+   "no_futura": true
   }
  },
  {
@@ -3790,7 +3949,8 @@ export const CAMPOS = [
     [
      "ABORTO"
     ]
-   ]
+   ],
+   "no_futura": true
   }
  },
  {
@@ -3855,7 +4015,8 @@ export const CAMPOS = [
      "11",
      "12"
     ]
-   ]
+   ],
+   "no_futura": true
   }
  },
  {

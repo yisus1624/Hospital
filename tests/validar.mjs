@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import { leerCSV, mapearColumnas, aCSV, nombreArchivo } from '../src/core/archivo.js';
-import { procesar } from '../src/core/corrector.js';
+import { procesar, OPCIONES } from '../src/core/corrector.js';
 import { normalizarCelda } from '../src/core/normalizar.js';
 import { CAMPOS, POR_KEY } from '../src/core/esquema.js';
 import { limpiar } from '../src/core/texto.js';
@@ -93,7 +93,7 @@ const sinExplicar = r.cambios.filter(c => {
   if (c.tipo === 'formato') {
     // Volver a normalizar el valor original debe dar exactamente el nuevo:
     // es la misma informacion, solo reescrita.
-    if (normalizarCelda(c.antes, porCol[c.campo]).valor === c.despues) return false;
+    if (normalizarCelda(c.antes, porCol[c.campo], OPCIONES).valor === c.despues) return false;
     return !EQUIV_SIFILIS.has(`${c.antes}>${c.despues}`);
   }
   if (c.tipo === 'instructivo') {
@@ -239,31 +239,41 @@ comprobar(r.filas.every(f => f.sifilis_confirmada !== 'NO' || f.tratamiento_sifi
   'Sin sifilis confirmada, el tratamiento es 4 (NA)');
 comprobar(r.filas.every(f => f.ecografia3 !== 'NO' || f.anormalidades_eco3 === ''),
   'Con ecografia3 en NO, las anormalidades quedan vacias');
-// La enye se conserva: CAÑAS es un apellido distinto de CANAS y de CAAS.
-comprobar(!/[^\x00-\x7FÑñ]/.test(csv),
-  'La salida no trae tildes ni caracteres raros, solo la enye');
-comprobar(r.filas.some(f => f.apellido1 === 'CAÑAS'),
-  'El apellido CAÑAS conserva la enye', 'antes salia CAAS');
+// La plataforma rechaza la enye ("debe contener solo letras"): por defecto se
+// sustituye por N. Nunca se quita: CAAS seria otro apellido.
+comprobar(!/[^\x00-\x7F]/.test(csv),
+  'La salida es ASCII puro: sin tildes ni enye');
+comprobar(r.filas.some(f => f.apellido1 === 'CANAS'),
+  'El apellido CAÑAS sale como CANAS', 'nunca CAAS');
 
-// Cuando la plataforma la rechaza, el reporte de errores ofrece el reemplazo.
-const rN = procesar(brutas, { enyeComoN: true });
-comprobar(rN.filas.some(f => f.apellido1 === 'CANAS'),
-  'Con enyeComoN activo, CAÑAS pasa a CANAS');
-comprobar(!/[^\x00-\x7F]/.test(aCSV(rN.filas)),
-  'Con enyeComoN activo la salida es ASCII puro');
+// Con la opcion apagada la enye se conserva.
+const rE = procesar(brutas, { enyeComoN: false });
+comprobar(rE.filas.some(f => f.apellido1 === 'CAÑAS'),
+  'Con enyeComoN apagado, CAÑAS conserva la enye');
 
 // El detector solo se dispara con la evidencia del propio sistema.
 const cruceEnye = cruzar(
   [{ fila: 7, campoBruto: 'apellido_1', campo: POR_KEY.apellido1,
      mensaje: 'El campo apellido 1 debe contener solo letras' }],
-  r.filas, r.pendientes);
+  rE.filas, rE.pendientes);
 comprobar(detectarEnyeRechazada(cruceEnye).detectada,
   'Se detecta que la plataforma rechazo la enye');
 comprobar(!detectarEnyeRechazada(cruzar(
   [{ fila: 3, campoBruto: 'apellido_1', campo: POR_KEY.apellido1,
      mensaje: 'El campo apellido 1 debe contener solo letras' }],
-  r.filas, r.pendientes)).detectada,
+  rE.filas, rE.pendientes)).detectada,
   'No se dispara en una fila sin enye');
+
+// Un error sobre una celda que sale igual que entro no se da por resuelto,
+// aunque el corrector no vea nada en ella: la plataforma la volvera a rechazar.
+const fDiag = r.filas.findIndex(f => f.diag2 && !r.pendientes.some(p => p.fila === r.filas.indexOf(f) + 2 && p.campo === 'diag2'));
+const cruceDiag = cruzar(
+  [{ fila: fDiag + 2, campoBruto: 'diag2', campo: POR_KEY.diag2,
+     mensaje: 'El codigo diag2 no coincide con los codigos EDIA_DIAGNOSTICO' }],
+  r.filas, r.pendientes, brutas);
+comprobar(cruceDiag[0].estado === 'sin_cambio',
+  'Un error sobre una celda sin cambios queda como «sigue igual», no como resuelto',
+  `estado: ${cruceDiag[0].estado}`);
 
 // ---------------------------------------------------------------------------
 

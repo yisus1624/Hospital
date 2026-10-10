@@ -8,6 +8,7 @@ const $ = id => document.getElementById(id);
 const ESTADO_ETIQUETA = {
   pendiente: ['falta', 'Sigue abierto'],
   dependiente: ['incoherente', 'Depende de otro campo'],
+  sin_cambio: ['falta', 'Sigue igual'],
   corregido: ['bien', 'Ya resuelto'],
   desconocido: ['incoherente', 'Sin ubicar'],
 };
@@ -46,7 +47,7 @@ export function iniciarErrores({ estado: obtenerEstado, leerTexto, escapar, repr
     reprocesar({ enyeComoN: true });
     const estado = obtenerEstado();
     if (!estado || !ultimoReporte) return;
-    pintar(cruzar(ultimoReporte.errores, estado.filas, estado.pendientes),
+    pintar(cruzar(ultimoReporte.errores, estado.filas, estado.pendientes, estado.originales),
            ultimoReporte.problema, true);
   });
 
@@ -90,7 +91,7 @@ export function iniciarErrores({ estado: obtenerEstado, leerTexto, escapar, repr
       }
 
       ultimoReporte = { errores, problema };
-      pintar(cruzar(errores, estado.filas, estado.pendientes), problema);
+      pintar(cruzar(errores, estado.filas, estado.pendientes, estado.originales), problema);
 
     } catch (err) {
       fallar(`No se pudo leer el reporte: ${err.message}`);
@@ -143,20 +144,21 @@ export function iniciarErrores({ estado: obtenerEstado, leerTexto, escapar, repr
 
     $('eTotal').textContent = r.total;
     $('eCorregidos').textContent = r.corregidos;
-    $('eSiguen').textContent = r.pendientes + r.dependientes + r.desconocidos;
-    $('tarjetaESiguen').className = 'metrica ' +
-      (r.pendientes + r.dependientes + r.desconocidos ? 'atencion' : 'limpia');
+    const siguen = r.pendientes + r.dependientes + r.sinCambio + r.desconocidos;
+    $('eSiguen').textContent = siguen;
+    $('tarjetaESiguen').className = 'metrica ' + (siguen ? 'atencion' : 'limpia');
 
     const grupos = agruparPorMensaje(cruzados);
     const abiertos = grupos.filter(g => g.pendientes > 0).length;
     const colgados = grupos.filter(g => !g.pendientes && g.dependientes > 0).length;
+    const igualQueAntes = grupos.filter(g => !g.pendientes && !g.dependientes && g.sinCambio > 0).length;
     const sinUbicar = grupos.filter(g => !g.pendientes && !g.campo && !g.esNombreArchivo).length;
 
     const cierre = $('cierreErrores');
     const partes = [`La plataforma reportó ${r.total} errores en ${r.filas} filas, agrupados en ${grupos.length} tipos.`];
 
-    if (abiertos || colgados) {
-      const total = abiertos + colgados;
+    if (abiertos || colgados || igualQueAntes) {
+      const total = abiertos + colgados + igualQueAntes;
       $('tituloCierre').textContent = total === 1
         ? 'Queda 1 tipo de error por resolver'
         : `Quedan ${total} tipos de error por resolver`;
@@ -182,6 +184,12 @@ export function iniciarErrores({ estado: obtenerEstado, leerTexto, escapar, repr
         `Otros ${colgados} ${colgados === 1 ? 'tipo depende' : 'tipos dependen'} de un campo que ` +
         'todavía está por completar: no se pueden dar por resueltos hasta que lo decidas.');
     }
+    if (igualQueAntes) {
+      partes.push(
+        `${igualQueAntes} ${igualQueAntes === 1 ? 'tipo sale marcado' : 'tipos salen marcados'} «Sigue igual»: ` +
+        'SIRA no encuentra la falla, pero la celda tiene el mismo valor que la plataforma rechazó, así que ' +
+        'la volverá a rechazar. Revísala con el mensaje de la plataforma (por ejemplo, un código CIE-10 que no existe).');
+    }
     if (sinUbicar) {
       partes.push(`${sinUbicar} no se pudieron ubicar en una columna del reporte.`);
     }
@@ -194,6 +202,7 @@ export function iniciarErrores({ estado: obtenerEstado, leerTexto, escapar, repr
       <tbody>${grupos.map(g => {
         const estado = g.pendientes ? 'pendiente'
           : g.dependientes ? 'dependiente'
+          : g.sinCambio ? 'sin_cambio'
           : (g.campo || g.esNombreArchivo) ? 'corregido'
           : 'desconocido';
         const [clase, texto] = ESTADO_ETIQUETA[estado];

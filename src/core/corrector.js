@@ -120,14 +120,12 @@ export function corregirFila(bruta, nFila, opciones) {
   // 5. Verificaciones contra el instructivo.
   reglas.verificarObligatorios(fila, pend);
 
-  const antesDeFechas = pendientes.length;
   reglas.verificarFechas(fila, pend);
-  // Si alguna fecha quedo fuera de orden, la FUM suele ser la causa: se
-  // contrasta con la semana gestacional para senalar el dato a revisar.
-  if (pendientes.length > antesDeFechas) reglas.verificarFum(fila, pend);
+  reglas.verificarFum(fila, pend);
 
   reglas.verificarRangos(fila, pend);
   reglas.verificarLongitudes(fila, pend);
+  reglas.verificarCie10(fila, pend);
 
   return { fila, cambios, pendientes };
 }
@@ -135,12 +133,12 @@ export function corregirFila(bruta, nFila, opciones) {
 /**
  * Opciones del corrector.
  *
- * La enye se conserva. Solo se sustituye por N si el reporte de errores de la
- * plataforma demuestra que la rechaza y la usuaria lo confirma (ver
- * `errores-sistema.js`).
+ * La enye se sustituye por N: la plataforma la rechazo en todos los reportes
+ * de errores recibidos ("El campo apellido 1 debe contener solo letras" sobre
+ * CAÑAS, SEÑA y NUÑEZ). Con `enyeComoN: false` se conserva.
  */
 export const OPCIONES = Object.freeze({
-  enyeComoN: false,
+  enyeComoN: true,
 });
 
 /**
@@ -176,6 +174,8 @@ export function procesar(filasBrutas, opciones = {}) {
     pendientes.push(...r.pendientes);
   });
 
+  pendientes.push(...revisarPeriodo(filas, pendientes));
+
   return {
     filas,
     cambios,
@@ -184,6 +184,37 @@ export function procesar(filasBrutas, opciones = {}) {
     avisos: avisosDeFechas(ordenFechas),
     resumen: resumir(filas, cambios, pendientes),
   };
+}
+
+/**
+ * El periodo reportado es uno solo por archivo.
+ *
+ * La fecha final del periodo "debe corresponder a la fecha de corte del nombre
+ * del archivo", y el nombre es uno: todas las filas tienen que traer el mismo
+ * periodo. Las que se apartan del que trae la mayoria se señalan con ese como
+ * sugerencia. Se revisa sobre el archivo entero porque fila a fila no se ve.
+ */
+function revisarPeriodo(filas, pendientes) {
+  const ya = new Set(pendientes.map(p => `${p.fila}|${p.campo}`));
+  const nuevos = [];
+  for (const key of ['fecha_ini_periodo', 'fecha_fin_periodo']) {
+    const cuenta = new Map();
+    for (const f of filas) if (f[key]) cuenta.set(f[key], (cuenta.get(f[key]) ?? 0) + 1);
+    if (cuenta.size < 2) continue;
+
+    const [comun, veces] = [...cuenta].sort((a, b) => b[1] - a[1])[0];
+    const c = POR_KEY[key];
+    filas.forEach((f, i) => {
+      if (!f[key] || f[key] === comun || ya.has(`${i + 2}|${c.col}`)) return;
+      nuevos.push({
+        fila: i + 2, campo: c.col, nombre: c.nombre, valor: f[key], tipo: 'incoherente',
+        motivo: `El archivo reporta un solo periodo y ${veces} de ${filas.length} filas traen ` +
+                `${comun}; esta trae ${f[key]}`,
+        sugerido: comun,
+      });
+    });
+  }
+  return nuevos;
 }
 
 /** Avisos sobre como se leyeron las fechas con barras. */

@@ -284,6 +284,10 @@ async function cargar(file) {
     estado = {
       ...resultado,
       brutas,
+      // Copia intacta del archivo tal como llego: `brutas` recibe las
+      // ediciones de la ficha, y el cruce con el reporte de la plataforma
+      // necesita saber que valor fue el que se rechazo.
+      originales: brutas.map(b => ({ ...b })),
       opciones: {},
       partes: { ...partes },
       sugeridas: { ...partes },

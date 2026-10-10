@@ -99,9 +99,9 @@ function errorNumero(original, campo) {
 /**
  * Sustituye la enye por N.
  *
- * Solo se usa cuando la plataforma ya rechazo el archivo por ese motivo y la
- * usuaria confirma el cambio: por defecto la enye se conserva, porque forma
- * parte del apellido (CAÑAS y CANAS son apellidos distintos).
+ * Activo por defecto (`OPCIONES.enyeComoN`): la plataforma rechaza la enye
+ * con "debe contener solo letras", y lo ha hecho en cada reporte de errores
+ * recibido (CAÑAS, SEÑA, NUÑEZ).
  */
 const enyeAN = s => String(s).replace(/ñ/g, 'n').replace(/Ñ/g, 'N');
 
@@ -224,27 +224,24 @@ export function normalizarCelda(bruto, campo, opciones = {}) {
         if (n === null) return { valor: null, error: errorNumero(original, campo) };
         return { valor: n };
       }
-      // Mayusculas sin tildes ni caracteres especiales, pero **con enye**.
+      // Mayusculas sin tildes ni caracteres especiales.
       //
-      // El instructivo pide el texto "sin caracteres especiales, ni tildes".
-      // La enye no es ninguna de las dos cosas: es una letra del alfabeto
-      // español y forma parte del apellido, asi que se conserva. Quitarla
-      // convertiria CAÑAS en CAAS y sustituirla convertiria CAÑAS en CANAS:
-      // los tres son apellidos distintos.
-      //
-      // Si la plataforma llega a rechazarla, el reporte de errores ofrece
-      // `enyeComoN` y, si la usuaria lo confirma, se sustituye por N.
+      // El instructivo pide el texto "sin caracteres especiales, ni tildes", y
+      // la plataforma cuenta la enye como caracter especial: la rechaza con
+      // "debe contener solo letras". Se sustituye por N (CAÑAS pasa a CANAS),
+      // nunca se quita (CAAS seria otro apellido). Con `enyeComoN: false` se
+      // conserva.
       let v = textoLibre(s, opciones);
       if (campo.x?.cie10) v = v.replace(/ /g, '');
 
       if (opciones.enyeComoN && /ñ/i.test(s)) {
         return {
           valor: v,
-          nota: 'La plataforma rechazó la Ñ en este campo y se confirmó reemplazarla por N',
+          nota: 'La Ñ se reemplaza por N: la plataforma la rechaza ("debe contener solo letras")',
         };
       }
       // Se avisa solo si se quito algo de verdad (tildes, simbolos), no por la
-      // enye, que se respeta.
+      // enye cuando se decidio conservarla.
       if (/[^\x00-\x7F]/.test(s.replace(/ñ/gi, ''))) {
         return {
           valor: v,
